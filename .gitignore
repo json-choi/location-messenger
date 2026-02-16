@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+bun.lock
+
+# Build
+dist/
+.expo/
+*.log
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Other projects (separate repos)
+game-builder/
+worship-team-scheduler/
+ytbg/
+ytbg-server/
+
+# Credentials
+.github-token
+.neon-db-credentials
+.railway-token
+.env.github
+
+# Memory/Agent files
+AGENTS.md
+BOOTSTRAP.md
+HEARTBEAT.md
+IDENTITY.md
+MEMORY.md
+SOUL.md
+TOOLS.md
+USER.md
+memory/
+claude-skills-guide-ko.md
+
+# Temp files
+["id].tsx"]

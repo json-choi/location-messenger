@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model users {
+  id                     String   @id @default(cuid())
+  email                  String   @unique
+  name                   String?
+  avatar                 String?
+  characterType          String   @default("cat")
+  characterColor         String   @default("#FF6B6B")
+  locationSharingEnabled Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  locations           locations[]
+  sentFriendships     friendships[]   @relation("requester")
+  receivedFriendships friendships[]   @relation("addressee")
+  groupMemberships    group_members[]
+  createdGroups       groups[]
+  sentMessages        messages[]      @relation("sender")
+  receivedMessages    messages[]      @relation("receiver")
+}
+
+model locations {
+  id        String   @id @default(cuid())
+  userId    String
+  latitude  Float
+  longitude Float
+  accuracy  Float?
+  isActive  Boolean  @default(true)
+  timestamp DateTime @default(now())
+
+  user users @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([timestamp])
+}
+
+model friendships {
+  id          String           @id @default(cuid())
+  requesterId String
+  addresseeId String
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  requester users @relation("requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee users @relation("addressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId])
+  @@index([addresseeId])
+}
+
+model groups {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  creatorId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator  users           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  members  group_members[]
+  messages messages[]
+
+  @@index([creatorId])
+}
+
+model group_members {
+  id       String   @id @default(cuid())
+  groupId  String
+  userId   String
+  joinedAt DateTime @default(now())
+
+  group groups @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  users  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model messages {
+  id         String      @id @default(cuid())
+  content    String
+  type       MessageType @default(TEXT)
+  senderId   String
+  groupId    String?
+  receiverId String?
+  createdAt  DateTime    @default(now())
+
+  sender   users   @relation("sender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver users?  @relation("receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  group    groups? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([groupId])
+  @@index([receiverId])
+  @@index([createdAt])
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+enum MessageType {
+  TEXT
+  LOCATION_SHARE
+  SYSTEM
+}
