@@ -11,6 +11,7 @@ import {
   Platform,
   Share,
   Alert,
+  Modal,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Region } from 'react-native-maps'
@@ -23,7 +24,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  runOnJS,
 } from 'react-native-reanimated'
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler'
 import {
@@ -43,6 +43,12 @@ const DRAG_BAR_HEIGHT = 24
 const MIN_CHAT_HEIGHT = 80
 const MAX_CHAT_HEIGHT = 400
 
+interface DestinationInput {
+  lat: number
+  lng: number
+  name: string
+}
+
 export default function MapScreen() {
   const router = useRouter()
   const { user, currentRoom, setCurrentRoom } = useUser()
@@ -51,9 +57,13 @@ export default function MapScreen() {
   
   const [chatInput, setChatInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showDestinationModal, setShowDestinationModal] = useState(false)
+  const [pendingDestination, setPendingDestination] = useState<DestinationInput | null>(null)
+  const [destinationName, setDestinationName] = useState('')
   
   const chatHeight = useSharedValue(MIN_CHAT_HEIGHT)
   const scrollViewRef = useRef<ScrollView>(null)
+  const mapRef = useRef<any>(null)
 
   useEffect(() => {
     requestPermission()
@@ -157,6 +167,57 @@ export default function MapScreen() {
     if (!chatInput.trim() || !currentRoom) return
     sendRoomChat(currentRoom.code, chatInput.trim())
     setChatInput('')
+  }
+
+  const setDestination = async () => {
+    if (!pendingDestination || !currentRoom) return
+    
+    try {
+      await fetch(`${API_URL}/api/rooms/${currentRoom.code}/destination`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: pendingDestination.lat,
+          lng: pendingDestination.lng,
+          name: destinationName || '목표지점',
+        }),
+      })
+      
+      setShowDestinationModal(false)
+      setPendingDestination(null)
+      setDestinationName('')
+    } catch (error) {
+      console.error('Failed to set destination:', error)
+      Alert.alert('오류', '목표지점 설정에 실패했습니다.')
+    }
+  }
+
+  const clearDestination = async () => {
+    if (!currentRoom) return
+    
+    try {
+      await fetch(`${API_URL}/api/rooms/${currentRoom.code}/destination`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: null, lng: null, name: null }),
+      })
+    } catch (error) {
+      console.error('Failed to clear destination:', error)
+    }
+  }
+
+  const handleMapLongPress = (event: any) => {
+    if (!currentRoom) {
+      Alert.alert('알림', '먼저 방을 만들어주세요.')
+      return
+    }
+    
+    const { latitude, longitude } = event.nativeEvent.coordinate || {}
+    if (latitude && longitude) {
+      setPendingDestination({ lat: latitude, lng: longitude, name: '' })
+      setDestinationName('')
+      setShowDestinationModal(true)
+    }
   }
 
   const gesture = Gesture.Pan()
@@ -263,11 +324,74 @@ export default function MapScreen() {
             )}
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.shareButton} onPress={shareRoomLink}>
-            <Text style={styles.shareButtonText}>🔗 초대 링크 공유</Text>
-          </TouchableOpacity>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.shareButton} onPress={shareRoomLink}>
+              <Text style={styles.shareButtonText}>🔗 초대</Text>
+            </TouchableOpacity>
+            {!roomInfo?.destinationLat ? (
+              <TouchableOpacity 
+                style={styles.destinationButton} 
+                onPress={() => {
+                  if (currentLocation) {
+                    setPendingDestination({
+                      lat: currentLocation.coords.latitude + 0.001,
+                      lng: currentLocation.coords.longitude + 0.001,
+                      name: '',
+                    })
+                    setDestinationName('')
+                    setShowDestinationModal(true)
+                  }
+                }}
+              >
+                <Text style={styles.destinationButtonText}>🎯 목표지점</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.clearDestinationButton} onPress={clearDestination}>
+                <Text style={styles.clearDestinationButtonText}>✕ 목표 삭제</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
+
+      {/* Destination Modal */}
+      <Modal
+        visible={showDestinationModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDestinationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>목표지점 설정</Text>
+            <Text style={styles.modalSubtitle}>
+              목표지점의 이름을 입력하세요
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={destinationName}
+              onChangeText={setDestinationName}
+              placeholder="예: 강남역, 우리 집..."
+              placeholderTextColor="#999"
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => {
+                  setShowDestinationModal(false)
+                  setPendingDestination(null)
+                }}
+              >
+                <Text style={styles.modalCancelText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmButton} onPress={setDestination}>
+                <Text style={styles.modalConfirmText}>설정</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Chat Panel */}
       <Animated.View style={[styles.chatPanel, animatedStyle]}>
@@ -529,5 +653,95 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
     textAlign: 'center',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  destinationButton: {
+    flex: 1,
+    backgroundColor: '#FF9500',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  destinationButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  clearDestinationButton: {
+    flex: 1,
+    backgroundColor: '#FF3B30',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  clearDestinationButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 320,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 })
