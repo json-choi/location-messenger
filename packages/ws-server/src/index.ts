@@ -1,74 +1,61 @@
 import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
+import { prisma } from '@location-messenger/db'
+
+// 클라이언트 정보 타입
+interface ClientInfo {
+  ws: any
+  userId: string
+  roomCode?: string
+  lastLocation?: { lat: number; lng: number; accuracy?: number; speed?: number }
+}
 
 // 연결된 클라이언트 관리
-const clients = new Map<string, { ws: any; userId: string; lastLocation?: { lat: number; lng: number } }>()
+const clients = new Map<string, ClientInfo>()
+
+// 룸별 클라이언트 관리
+const rooms = new Map<string, Set<string>>() // roomCode -> Set of ws.id
 
 // 메시지 타입
 type WSMessage = 
   | { type: 'join'; userId: string }
-  | { type: 'location_update'; userId: string; lat: number; lng: number; accuracy?: number }
-  | { type: 'chat'; from: string; to: string; content: string }
-  | { type: 'group_chat'; from: string; groupId: string; content: string }
+  | { type: 'join_room'; userId: string; roomCode: string }
+  | { type: 'leave_room'; userId: string; roomCode: string }
+  | { type: 'location_update'; userId: string; lat: number; lng: number; accuracy?: number; speed?: number }
+  | { type: 'room_chat'; roomCode: string; senderId: string; content: string }
+  | { type: 'set_destination'; roomCode: string; lat: number; lng: number; name?: string }
 
 const app = new Elysia()
   .use(cors())
-  .get('/health', () => ({ status: 'ok', connections: clients.size }))
+  .get('/health', () => ({ 
+    status: 'ok', 
+    connections: clients.size,
+    rooms: rooms.size 
+  }))
   .ws('/ws', {
     open(ws) {
-      console.log('Client connected')
+      console.log('Client connected:', ws.id)
     },
     
     message(ws, msg: WSMessage) {
       switch (msg.type) {
         case 'join':
-          // 유저 등록
-          clients.set(ws.id, { ws, userId: msg.userId })
-          console.log(`User ${msg.userId} joined. Total: ${clients.size}`)
-          
-          // 다른 유저들에게 새 유저 알림
-          broadcast(ws, { type: 'user_joined', userId: msg.userId }, msg.userId)
+          handleJoin(ws, msg)
           break
-          
+        case 'join_room':
+          handleJoinRoom(ws, msg)
+          break
+        case 'leave_room':
+          handleLeaveRoom(ws, msg)
+          break
         case 'location_update':
-          // 위치 업데이트 저장
-          const client = clients.get(ws.id)
-          if (client) {
-            client.lastLocation = { lat: msg.lat, lng: msg.lng }
-            
-            // 친구들에게 위치 브로드캐스트
-            broadcast(ws, {
-              type: 'friend_location',
-              userId: msg.userId,
-              lat: msg.lat,
-              lng: msg.lng,
-              accuracy: msg.accuracy
-            })
-          }
+          handleLocationUpdate(ws, msg)
           break
-          
-        case 'chat':
-          // 1:1 채팅
-          const receiver = findClientByUserId(msg.to)
-          if (receiver) {
-            receiver.ws.send({
-              type: 'chat',
-              from: msg.from,
-              content: msg.content,
-              timestamp: Date.now()
-            })
-          }
+        case 'room_chat':
+          handleRoomChat(ws, msg)
           break
-          
-        case 'group_chat':
-          // 그룹 채팅
-          broadcast(ws, {
-            type: 'group_chat',
-            from: msg.from,
-            groupId: msg.groupId,
-            content: msg.content,
-            timestamp: Date.now()
-          }, msg.from)
+        case 'set_destination':
+          handleSetDestination(ws, msg)
           break
       }
     },
@@ -77,7 +64,25 @@ const app = new Elysia()
       const client = clients.get(ws.id)
       if (client) {
         console.log(`User ${client.userId} disconnected`)
-        broadcast(ws, { type: 'user_left', userId: client.userId }, client.userId)
+        
+        // 룸에서 나간 것을 알림
+        if (client.roomCode) {
+          broadcastToRoom(client.roomCode, {
+            type: 'user_left_room',
+            userId: client.userId,
+            roomCode: client.roomCode
+          }, ws.id)
+          
+          // 룸에서 제거
+          const roomClients = rooms.get(client.roomCode)
+          if (roomClients) {
+            roomClients.delete(ws.id)
+            if (roomClients.size === 0) {
+              rooms.delete(client.roomCode)
+            }
+          }
+        }
+        
         clients.delete(ws.id)
       }
     }
@@ -86,22 +91,179 @@ const app = new Elysia()
 
 console.log(`🦊 WebSocket server running at http://localhost:${app.server?.port}`)
 
-// 헬퍼 함수들
-function broadcast(ws: any, msg: any, excludeUserId?: string) {
-  for (const [id, client] of clients) {
-    if (client.userId !== excludeUserId) {
-      try {
-        client.ws.send(msg)
-      } catch (e) {
-        // 연결 끊긴 클라이언트 무시
+// ==================== 핸들러 함수들 ====================
+
+function handleJoin(ws: any, msg: { type: 'join'; userId: string }) {
+  clients.set(ws.id, { ws, userId: msg.userId })
+  console.log(`User ${msg.userId} joined. Total: ${clients.size}`)
+}
+
+async function handleJoinRoom(ws: any, msg: { type: 'join_room'; userId: string; roomCode: string }) {
+  const client = clients.get(ws.id)
+  if (!client) {
+    clients.set(ws.id, { ws, userId: msg.userId, roomCode: msg.roomCode })
+  } else {
+    client.roomCode = msg.roomCode
+  }
+  
+  // 룸에 클라이언트 추가
+  if (!rooms.has(msg.roomCode)) {
+    rooms.set(msg.roomCode, new Set())
+  }
+  rooms.get(msg.roomCode)!.add(ws.id)
+  
+  // DB에서 룸 정보와 멤버 조회
+  const room = await prisma.rooms.findUnique({
+    where: { code: msg.roomCode },
+    include: {
+      members: {
+        where: { leftAt: null },
+        include: {
+          user: true
+        }
       }
+    }
+  })
+  
+  if (room) {
+    // 새 유저에게 룸 정보 전송
+    ws.send({
+      type: 'room_info',
+      room: {
+        code: room.code,
+        name: room.name,
+        destinationLat: room.destinationLat,
+        destinationLng: room.destinationLng,
+        destinationName: room.destinationName,
+        members: room.members.map(m => ({
+          userId: m.userId,
+          user: m.user
+        }))
+      }
+    })
+    
+    // 룸 멤버들에게 새 유저 알림
+    const user = await prisma.users.findUnique({ where: { id: msg.userId } })
+    broadcastToRoom(msg.roomCode, {
+      type: 'user_joined_room',
+      userId: msg.userId,
+      user,
+      roomCode: msg.roomCode
+    }, ws.id)
+  }
+  
+  console.log(`User ${msg.userId} joined room ${msg.roomCode}. Room size: ${rooms.get(msg.roomCode)?.size}`)
+}
+
+function handleLeaveRoom(ws: any, msg: { type: 'leave_room'; userId: string; roomCode: string }) {
+  const client = clients.get(ws.id)
+  if (client) {
+    client.roomCode = undefined
+  }
+  
+  const roomClients = rooms.get(msg.roomCode)
+  if (roomClients) {
+    roomClients.delete(ws.id)
+    if (roomClients.size === 0) {
+      rooms.delete(msg.roomCode)
+    }
+  }
+  
+  broadcastToRoom(msg.roomCode, {
+    type: 'user_left_room',
+    userId: msg.userId,
+    roomCode: msg.roomCode
+  }, ws.id)
+  
+  console.log(`User ${msg.userId} left room ${msg.roomCode}`)
+}
+
+function handleLocationUpdate(ws: any, msg: { type: 'location_update'; userId: string; lat: number; lng: number; accuracy?: number; speed?: number }) {
+  const client = clients.get(ws.id)
+  if (client) {
+    client.lastLocation = { 
+      lat: msg.lat, 
+      lng: msg.lng, 
+      accuracy: msg.accuracy,
+      speed: msg.speed 
+    }
+    
+    // 룸에 있으면 룸 멤버들에게 위치 브로드캐스트
+    if (client.roomCode) {
+      broadcastToRoom(client.roomCode, {
+        type: 'room_location_update',
+        userId: msg.userId,
+        lat: msg.lat,
+        lng: msg.lng,
+        accuracy: msg.accuracy,
+        speed: msg.speed,
+        timestamp: Date.now()
+      }, ws.id)
     }
   }
 }
 
-function findClientByUserId(userId: string) {
-  for (const [id, client] of clients) {
-    if (client.userId === userId) return client
+async function handleRoomChat(ws: any, msg: { type: 'room_chat'; roomCode: string; senderId: string; content: string }) {
+  // DB에 메시지 저장
+  const room = await prisma.rooms.findUnique({ where: { code: msg.roomCode } })
+  if (room) {
+    await prisma.room_messages.create({
+      data: {
+        roomId: room.id,
+        senderId: msg.senderId,
+        content: msg.content,
+        type: 'TEXT'
+      }
+    })
   }
-  return null
+  
+  // 룸 멤버들에게 브로드캐스트
+  broadcastToRoom(msg.roomCode, {
+    type: 'room_chat',
+    roomCode: msg.roomCode,
+    senderId: msg.senderId,
+    content: msg.content,
+    timestamp: Date.now()
+  })
+}
+
+async function handleSetDestination(ws: any, msg: { type: 'set_destination'; roomCode: string; lat: number; lng: number; name?: string }) {
+  // DB 업데이트
+  await prisma.rooms.update({
+    where: { code: msg.roomCode },
+    data: {
+      destinationLat: msg.lat,
+      destinationLng: msg.lng,
+      destinationName: msg.name
+    }
+  })
+  
+  // 룸 멤버들에게 알림
+  broadcastToRoom(msg.roomCode, {
+    type: 'destination_updated',
+    roomCode: msg.roomCode,
+    lat: msg.lat,
+    lng: msg.lng,
+    name: msg.name
+  })
+}
+
+// ==================== 헬퍼 함수들 ====================
+
+function broadcastToRoom(roomCode: string, msg: any, excludeWsId?: string) {
+  const roomClients = rooms.get(roomCode)
+  if (!roomClients) return
+  
+  for (const wsId of roomClients) {
+    if (wsId !== excludeWsId) {
+      const client = clients.get(wsId)
+      if (client) {
+        try {
+          client.ws.send(msg)
+        } catch (e) {
+          // 연결 끊긴 클라이언트 무시
+        }
+      }
+    }
+  }
 }
