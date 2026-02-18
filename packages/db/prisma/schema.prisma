@@ -10,12 +10,13 @@ datasource db {
 
 model users {
   id                        String        @id @default(cuid())
-  email                     String        @unique
+  email                     String?       @unique
   name                      String?
   avatar                    String?
   characterType             String        @default("cat")
   characterColor            String        @default("#FF6B6B")
   locationSharingEnabled    Boolean       @default(true)
+  isAnonymous               Boolean       @default(false)
   createdAt                 DateTime      @default(now())
   updatedAt                 DateTime      @updatedAt
   
@@ -26,6 +27,7 @@ model users {
   createdGroups             groups[]
   sentMessages              messages[]    @relation("sender")
   receivedMessages          messages[]    @relation("receiver")
+  roomMemberships           room_members[]
 }
 
 model locations {
@@ -117,4 +119,52 @@ enum MessageType {
   TEXT
   LOCATION_SHARE
   SYSTEM
+}
+
+// MVP: 익명 사용자용 채팅방
+model rooms {
+  id              String        @id @default(cuid())
+  code            String        @unique  // 초대 링크용 짧은 코드
+  name            String?
+  destinationLat  Float?        // 목표지점 위도
+  destinationLng  Float?        // 목표지점 경도
+  destinationName String?       // 목표지점 이름
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  expiresAt       DateTime?     // 방 만료 시간 (선택)
+  
+  members         room_members[]
+  messages        room_messages[]
+  
+  @@index([code])
+  @@index([createdAt])
+}
+
+model room_members {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?  // 방 나간 시간
+  
+  room      rooms    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+}
+
+model room_messages {
+  id        String   @id @default(cuid())
+  roomId    String
+  senderId  String
+  content   String
+  type      MessageType @default(TEXT)
+  createdAt DateTime @default(now())
+  
+  room      rooms    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  
+  @@index([roomId])
+  @@index([createdAt])
 }

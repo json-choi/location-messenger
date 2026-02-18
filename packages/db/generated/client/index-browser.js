@@ -129,6 +129,7 @@ exports.Prisma.UsersScalarFieldEnum = {
   characterType: 'characterType',
   characterColor: 'characterColor',
   locationSharingEnabled: 'locationSharingEnabled',
+  isAnonymous: 'isAnonymous',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -178,6 +179,35 @@ exports.Prisma.MessagesScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.RoomsScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  name: 'name',
+  destinationLat: 'destinationLat',
+  destinationLng: 'destinationLng',
+  destinationName: 'destinationName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  expiresAt: 'expiresAt'
+};
+
+exports.Prisma.Room_membersScalarFieldEnum = {
+  id: 'id',
+  roomId: 'roomId',
+  userId: 'userId',
+  joinedAt: 'joinedAt',
+  leftAt: 'leftAt'
+};
+
+exports.Prisma.Room_messagesScalarFieldEnum = {
+  id: 'id',
+  roomId: 'roomId',
+  senderId: 'senderId',
+  content: 'content',
+  type: 'type',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -210,7 +240,10 @@ exports.Prisma.ModelName = {
   friendships: 'friendships',
   groups: 'groups',
   group_members: 'group_members',
-  messages: 'messages'
+  messages: 'messages',
+  rooms: 'rooms',
+  room_members: 'room_members',
+  room_messages: 'room_messages'
 };
 
 /**
