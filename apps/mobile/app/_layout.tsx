@@ -9,8 +9,11 @@ export default function RootLayout() {
       <WebSocketProvider>
         <LocationProvider>
           <Stack>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="onboarding" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="chat/[id]" options={{ headerShown: true, title: '채팅' }} />
+            <Stack.Screen name="room/[code]" options={{ headerShown: false }} />
           </Stack>
         </LocationProvider>
       </WebSocketProvider>

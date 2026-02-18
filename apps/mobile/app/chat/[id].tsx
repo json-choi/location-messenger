@@ -12,58 +12,32 @@ import {
 import { useLocalSearchParams, router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useUser, useWebSocket } from '../../contexts'
-import { Message, CHARACTER_EMOJIS } from '@location-messenger/shared'
+import { CHARACTER_EMOJIS } from '@location-messenger/shared'
 import ChatBubble from '../../components/ChatBubble'
 
 export default function ChatScreen() {
   const { id: friendId } = useLocalSearchParams<{ id: string }>()
   const { user } = useUser()
-  const { messages: wsMessages, sendMessage, startChat, currentChatId } = useWebSocket()
+  const { messages: wsMessages, sendChat, connect, isConnected } = useWebSocket()
   const [inputText, setInputText] = useState('')
-  const [messages, setMessages] = useState<Message[]>([])
   const scrollViewRef = useRef<ScrollView>(null)
 
+  // Connect WebSocket when user is available
   useEffect(() => {
-    if (friendId) {
-      startChat(friendId)
+    if (user?.id && !isConnected) {
+      connect(user.id)
     }
-  }, [friendId])
+  }, [user?.id, isConnected, connect])
 
-  useEffect(() => {
-    if (wsMessages.length > 0) {
-      const chatMessages = wsMessages.filter(
-        (m) => m.type === 'chat' && (m.from === friendId || m.to === friendId)
-      )
-      // Convert to Message format and update
-      setMessages((prev) => {
-        const newMsgs = chatMessages.map((m) => ({
-          id: `msg-${Date.now()}-${Math.random()}`,
-          content: m.content,
-          type: 'TEXT' as const,
-          senderId: m.from,
-          receiverId: m.to,
-          createdAt: new Date(m.timestamp).toISOString(),
-        }))
-        return [...prev, ...newMsgs]
-      })
-    }
-  }, [wsMessages, friendId])
+  // Filter messages for this chat
+  const chatMessages = wsMessages.filter(
+    (m) => m.from === friendId || m.to === friendId
+  )
 
   const handleSend = () => {
     if (!inputText.trim() || !friendId || !user) return
 
-    sendMessage(friendId, inputText.trim())
-    
-    const newMessage: Message = {
-      id: `msg-${Date.now()}`,
-      content: inputText.trim(),
-      type: 'TEXT',
-      senderId: user.id,
-      receiverId: friendId,
-      createdAt: new Date().toISOString(),
-    }
-    
-    setMessages((prev) => [...prev, newMessage])
+    sendChat(friendId, inputText.trim())
     setInputText('')
     
     setTimeout(() => {
@@ -101,17 +75,24 @@ export default function ChatScreen() {
         contentContainerStyle={styles.messagesContent}
         onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
       >
-        {messages.length === 0 ? (
+        {chatMessages.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="chatbubble-outline" size={48} color="#ccc" />
             <Text style={styles.emptyText}>메시지를 보내보세요!</Text>
           </View>
         ) : (
-          messages.map((message) => (
+          chatMessages.map((message) => (
             <ChatBubble
               key={message.id}
-              message={message}
-              isOwn={message.senderId === user.id}
+              message={{
+                id: message.id,
+                content: message.content,
+                type: 'TEXT',
+                senderId: message.from,
+                receiverId: message.to || '',
+                createdAt: new Date(message.timestamp).toISOString(),
+              }}
+              isOwn={message.isMine}
             />
           ))
         )}
