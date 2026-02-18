@@ -1,7 +1,11 @@
 import React, { useMemo } from 'react'
 import { View, StyleSheet, Platform } from 'react-native'
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps'
-import { MapMarker, CHARACTER_EMOJIS } from '@location-messenger/shared'
+import {
+  NaverMapView,
+  NaverMapMarkerOverlay,
+} from '@mj-studio/react-native-naver-map'
+import { MapMarker } from '@location-messenger/shared'
 import CharacterMarker from './CharacterMarker'
 
 interface SmartMapProps {
@@ -13,7 +17,6 @@ interface SmartMapProps {
   style?: object
 }
 
-// 한국 영역 확인 (위도 33~39, 경도 124~132)
 function isInKorea(lat: number, lng: number): boolean {
   return lat >= 33 && lat <= 39 && lng >= 124 && lng <= 132
 }
@@ -27,11 +30,10 @@ export default function SmartMap({
   style,
 }: SmartMapProps) {
   const useNaverMap = useMemo(() => {
-    if (!region) return false
+    if (!region) return true
     return isInKorea(region.latitude, region.longitude)
   }, [region?.latitude, region?.longitude])
 
-  // 기본 지역 (서울)
   const defaultRegion: Region = {
     latitude: 37.5665,
     longitude: 126.9780,
@@ -44,9 +46,7 @@ export default function SmartMap({
   if (Platform.OS === 'web') {
     return (
       <View style={[styles.container, style]}>
-        <View style={styles.webPlaceholder}>
-          {/* 웹에서는 지도 미지원 - 추후 Google Maps Web API 연동 가능 */}
-        </View>
+        <View style={styles.webPlaceholder} />
       </View>
     )
   }
@@ -56,23 +56,19 @@ export default function SmartMap({
       <View style={[styles.container, style]}>
         <NaverMapView
           style={styles.map}
-          initialRegion={{
+          initialCamera={{
             latitude: currentRegion.latitude,
             longitude: currentRegion.longitude,
-            latitudeDelta: currentRegion.latitudeDelta,
-            longitudeDelta: currentRegion.longitudeDelta,
-          }}
-          showsUserLocation={showsUserLocation}
-          onRegionChange={(e: { nativeEvent: { region: Region } }) => {
-            onRegionChange?.(e.nativeEvent.region)
+            zoom: 15,
           }}
         >
           {markers.map((marker) => (
-            <NaverMapMarker
+            <NaverMapMarkerOverlay
               key={marker.id}
               latitude={marker.lat}
               longitude={marker.lng}
-              onClick={() => onMarkerPress?.(marker)}
+              caption={{ text: marker.name || '' }}
+              onTap={() => onMarkerPress?.(marker)}
             >
               <CharacterMarker
                 type={marker.characterType}
@@ -80,14 +76,13 @@ export default function SmartMap({
                 name={marker.name}
                 isOnline={marker.isOnline}
               />
-            </NaverMapMarker>
+            </NaverMapMarkerOverlay>
           ))}
         </NaverMapView>
       </View>
     )
   }
 
-  // Google Maps (해외)
   return (
     <View style={[styles.container, style]}>
       <MapView
@@ -126,7 +121,5 @@ const styles = StyleSheet.create({
   webPlaceholder: {
     flex: 1,
     backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 })

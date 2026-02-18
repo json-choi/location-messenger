@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import * as Location from 'expo-location'
 import * as TaskManager from 'expo-task-manager'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -17,36 +17,6 @@ interface LocationContextType {
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined)
-
-TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
-  if (error) {
-    console.error('Location task error:', error.message)
-    return
-  }
-
-  if (data) {
-    const { locations } = data as { locations: LocationObject[] }
-    
-    try {
-      const userId = await AsyncStorage.getItem('@current_user_id')
-      if (!userId) return
-
-      if (global.ws && global.ws.readyState === WebSocket.OPEN) {
-        locations.forEach((loc) => {
-          global.ws?.send(JSON.stringify({
-            type: 'location_update',
-            userId,
-            lat: loc.coords.latitude,
-            lng: loc.coords.longitude,
-            accuracy: loc.coords.accuracy,
-          }))
-        })
-      }
-    } catch (err) {
-      console.error('Failed to send location:', err)
-    }
-  }
-})
 
 export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null)
@@ -111,7 +81,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
             sendLocation(
               newLocation.coords.latitude,
               newLocation.coords.longitude,
-              newLocation.coords.accuracy ?? undefined
+              newLocation.coords.accuracy ?? undefined,
+              newLocation.coords.speed ?? undefined
             )
           }
         }
