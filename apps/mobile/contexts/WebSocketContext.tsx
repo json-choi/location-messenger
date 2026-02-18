@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
-import { WSMessage, UserLocation } from '@location-messenger/shared'
+import { WSMessage, UserLocation, RoomInfo } from '@location-messenger/shared'
 
 const WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'wss://localhost:3000/ws'
 
@@ -11,19 +11,21 @@ interface WebSocketContextType {
   isConnecting: boolean
   onlineStatus: OnlineStatus
   friendLocations: FriendLocations
-  messages: ChatMessage[]
+  roomInfo: RoomInfo | null
+  roomMessages: RoomChatMessage[]
   connect: (userId: string) => void
   disconnect: () => void
-  sendLocation: (lat: number, lng: number, accuracy?: number) => void
+  joinRoom: (userId: string, roomCode: string) => void
+  leaveRoom: (userId: string, roomCode: string) => void
+  sendLocation: (lat: number, lng: number, accuracy?: number, speed?: number) => void
+  sendRoomChat: (roomCode: string, content: string) => void
   sendChat: (to: string, content: string) => void
   clearMessages: () => void
 }
 
-interface ChatMessage {
+interface RoomChatMessage {
   id: string
-  from: string
-  to?: string
-  groupId?: string
+  senderId: string
   content: string
   timestamp: number
   isMine: boolean
@@ -31,18 +33,16 @@ interface ChatMessage {
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined)
 
-declare global {
-  var ws: WebSocket | undefined
-}
-
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [onlineStatus, setOnlineStatus] = useState<OnlineStatus>({})
   const [friendLocations, setFriendLocations] = useState<FriendLocations>({})
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null)
+  const [roomMessages, setRoomMessages] = useState<RoomChatMessage[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const currentUserIdRef = useRef<string>('')
+  const currentRoomCodeRef = useRef<string>('')
 
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
@@ -63,31 +63,62 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           },
         }))
         break
-      case 'chat':
-        setMessages((prev) => [
+      case 'room_location_update':
+        setFriendLocations((prev) => ({
+          ...prev,
+          [msg.userId]: {
+            lat: msg.lat,
+            lng: msg.lng,
+            accuracy: msg.accuracy,
+            timestamp: msg.timestamp,
+          },
+        }))
+        break
+      case 'room_info':
+        setRoomInfo(msg.room)
+        break
+      case 'user_joined_room':
+        setRoomInfo((prev) => {
+          if (!prev) return null
+          const exists = prev.members.some(m => m.userId === msg.userId)
+          if (exists) return prev
+          return {
+            ...prev,
+            members: [...prev.members, { userId: msg.userId, user: msg.user }]
+          }
+        })
+        break
+      case 'user_left_room':
+        setRoomInfo((prev) => {
+          if (!prev) return null
+          return {
+            ...prev,
+            members: prev.members.filter(m => m.userId !== msg.userId)
+          }
+        })
+        break
+      case 'room_chat':
+        setRoomMessages((prev) => [
           ...prev,
           {
             id: `msg-${Date.now()}`,
-            from: msg.from,
-            to: msg.to,
+            senderId: msg.senderId,
             content: msg.content,
             timestamp: msg.timestamp,
-            isMine: msg.from === currentUserIdRef.current,
+            isMine: msg.senderId === currentUserIdRef.current,
           },
         ])
         break
-      case 'group_chat':
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `msg-${Date.now()}`,
-            from: msg.from,
-            groupId: msg.groupId,
-            content: msg.content,
-            timestamp: msg.timestamp,
-            isMine: msg.from === currentUserIdRef.current,
-          },
-        ])
+      case 'destination_updated':
+        setRoomInfo((prev) => {
+          if (!prev) return null
+          return {
+            ...prev,
+            destinationLat: msg.lat,
+            destinationLng: msg.lng,
+            destinationName: msg.name,
+          }
+        })
         break
       case 'friend_status':
         setOnlineStatus((prev) => ({
@@ -106,7 +137,6 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
-    global.ws = ws
 
     ws.onopen = () => {
       setIsConnected(true)
@@ -127,7 +157,6 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       setIsConnected(false)
       setIsConnecting(false)
       wsRef.current = null
-      global.ws = undefined
     }
 
     ws.onerror = (error) => {
@@ -140,11 +169,26 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
-      global.ws = undefined
     }
   }, [])
 
-  const sendLocation = useCallback((lat: number, lng: number, accuracy?: number) => {
+  const joinRoom = useCallback((userId: string, roomCode: string) => {
+    currentRoomCodeRef.current = roomCode
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'join_room', userId, roomCode }))
+    }
+  }, [])
+
+  const leaveRoom = useCallback((userId: string, roomCode: string) => {
+    currentRoomCodeRef.current = ''
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'leave_room', userId, roomCode }))
+    }
+    setRoomInfo(null)
+    setRoomMessages([])
+  }, [])
+
+  const sendLocation = useCallback((lat: number, lng: number, accuracy?: number, speed?: number) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'location_update',
@@ -152,6 +196,18 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         lat,
         lng,
         accuracy,
+        speed,
+      }))
+    }
+  }, [])
+
+  const sendRoomChat = useCallback((roomCode: string, content: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'room_chat',
+        roomCode,
+        senderId: currentUserIdRef.current,
+        content,
       }))
     }
   }, [])
@@ -169,7 +225,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const clearMessages = useCallback(() => {
-    setMessages([])
+    setRoomMessages([])
   }, [])
 
   useEffect(() => {
@@ -185,10 +241,14 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         isConnecting,
         onlineStatus,
         friendLocations,
-        messages,
+        roomInfo,
+        roomMessages,
         connect,
         disconnect,
+        joinRoom,
+        leaveRoom,
         sendLocation,
+        sendRoomChat,
         sendChat,
         clearMessages,
       }}

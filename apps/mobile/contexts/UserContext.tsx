@@ -1,37 +1,44 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { User, CharacterType, CHARACTER_COLORS } from '@location-messenger/shared'
+import { v4 as uuidv4 } from 'uuid'
+import { User, CharacterType, RoomInfo } from '@location-messenger/shared'
 
 const USER_STORAGE_KEY = '@user_data'
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api'
+const ROOM_STORAGE_KEY = '@current_room'
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'
 
 interface UserContextType {
   user: User | null
   isLoading: boolean
-  isLoggedIn: boolean
-  login: (email: string, name?: string) => Promise<void>
+  isOnboarded: boolean
+  currentRoom: RoomInfo | null
+  onboard: (name: string, characterType: CharacterType, characterColor: string) => Promise<void>
   logout: () => Promise<void>
   updateCharacter: (type: CharacterType, color: string) => Promise<void>
   toggleLocationSharing: (enabled: boolean) => Promise<void>
   updateProfile: (name: string) => Promise<void>
+  setCurrentRoom: (room: RoomInfo | null) => void
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [currentRoom, setCurrentRoomState] = useState<RoomInfo | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Load user from storage on mount
   useEffect(() => {
     loadUser()
+    loadCurrentRoom()
   }, [])
 
   const loadUser = async () => {
     try {
       const userData = await AsyncStorage.getItem(USER_STORAGE_KEY)
       if (userData) {
-        setUser(JSON.parse(userData))
+        const parsed = JSON.parse(userData)
+        setUser(parsed)
       }
     } catch (error) {
       console.error('Failed to load user:', error)
@@ -40,38 +47,56 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const login = async (email: string, name?: string) => {
+  const loadCurrentRoom = async () => {
     try {
-      const response = await fetch(`${API_URL}/users`, {
+      const roomData = await AsyncStorage.getItem(ROOM_STORAGE_KEY)
+      if (roomData) {
+        setCurrentRoomState(JSON.parse(roomData))
+      }
+    } catch (error) {
+      console.error('Failed to load room:', error)
+    }
+  }
+
+  const onboard = async (name: string, characterType: CharacterType, characterColor: string) => {
+    const tempId = uuidv4()
+    
+    try {
+      const response = await fetch(`${API_URL}/api/users/anonymous`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email,
-          name: name || email.split('@')[0],
-          characterType: 'cat',
-          characterColor: CHARACTER_COLORS[0],
+          name: name || undefined,
+          characterType,
+          characterColor,
         }),
       })
+      
       const data = await response.json()
+      
       const newUser: User = {
-        id: data.id || `user-${Date.now()}`,
-        email,
-        name: name || email.split('@')[0],
-        characterType: 'cat',
-        characterColor: CHARACTER_COLORS[0],
+        id: data.user.id,
+        name: data.user.name,
+        characterType: data.user.characterType,
+        characterColor: data.user.characterColor,
         locationSharingEnabled: true,
+        authProvider: null,
+        authId: null,
+        createdAt: data.user.createdAt,
       }
+      
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser))
       setUser(newUser)
     } catch (error) {
-      console.error('Login failed:', error)
+      console.error('Failed to create user:', error)
       const fallbackUser: User = {
-        id: `user-${Date.now()}`,
-        email,
-        name: name || email.split('@')[0],
-        characterType: 'cat',
-        characterColor: CHARACTER_COLORS[0],
+        id: tempId,
+        name: name || `익명${tempId.substring(0, 4)}`,
+        characterType,
+        characterColor,
         locationSharingEnabled: true,
+        authProvider: null,
+        authId: null,
       }
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(fallbackUser))
       setUser(fallbackUser)
@@ -79,25 +104,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }
 
   const logout = async () => {
-    await AsyncStorage.removeItem(USER_STORAGE_KEY)
+    await AsyncStorage.multiRemove([USER_STORAGE_KEY, ROOM_STORAGE_KEY])
     setUser(null)
+    setCurrentRoomState(null)
   }
 
   const updateCharacter = async (type: CharacterType, color: string) => {
     if (!user) return
 
     const updatedUser = { ...user, characterType: type, characterColor: color }
-
-    try {
-      await fetch(`${API_URL}/users/${user.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterType: type, characterColor: color }),
-      })
-    } catch (error) {
-      console.error('Failed to update character:', error)
-    }
-
     await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
     setUser(updatedUser)
   }
@@ -106,17 +121,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!user) return
 
     const updatedUser = { ...user, locationSharingEnabled: enabled }
-
-    try {
-      await fetch(`${API_URL}/users/${user.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locationSharingEnabled: enabled }),
-      })
-    } catch (error) {
-      console.error('Failed to toggle location sharing:', error)
-    }
-
     await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
     setUser(updatedUser)
   }
@@ -125,32 +129,32 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!user) return
 
     const updatedUser = { ...user, name }
-
-    try {
-      await fetch(`${API_URL}/users/${user.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      })
-    } catch (error) {
-      console.error('Failed to update profile:', error)
-    }
-
     await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
     setUser(updatedUser)
   }
+
+  const setCurrentRoom = useCallback((room: RoomInfo | null) => {
+    setCurrentRoomState(room)
+    if (room) {
+      AsyncStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify(room))
+    } else {
+      AsyncStorage.removeItem(ROOM_STORAGE_KEY)
+    }
+  }, [])
 
   return (
     <UserContext.Provider
       value={{
         user,
         isLoading,
-        isLoggedIn: !!user,
-        login,
+        isOnboarded: !!user,
+        currentRoom,
+        onboard,
         logout,
         updateCharacter,
         toggleLocationSharing,
         updateProfile,
+        setCurrentRoom,
       }}
     >
       {children}
