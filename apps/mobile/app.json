@@ -1,30 +1,48 @@
 {
-  "expo": {
-    "name": "Location Messenger",
-    "slug": "location-messenger",
-    "version": "1.0.0",
-    "scheme": "locationmessenger",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.locationmessenger.app",
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "친구들에게 내 위치를 공유하기 위해 필요합니다.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "백그라운드에서도 위치를 공유하기 위해 필요합니다."
-      }
-    },
-    "android": {
-      "package": "com.locationmessenger.app",
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION"]
-    },
-    "plugins": [
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "위치 공유를 위해 위치 접근 권한이 필요합니다."
-        }
-      ]
-    ]
-  }
+    "expo": {
+        "name": "Location Messenger",
+        "slug": "location-messenger",
+        "version": "1.0.0",
+        "scheme": "locationmessenger",
+        "orientation": "portrait",
+        "icon": "./assets/icon.png",
+        "ios": {
+            "supportsTablet": true,
+            "bundleIdentifier": "com.locationmessenger.app",
+            "infoPlist": {
+                "NSLocationWhenInUseUsageDescription": "친구들에게 내 위치를 공유하기 위해 필요합니다.",
+                "NSLocationAlwaysAndWhenInUseUsageDescription": "백그라운드에서도 위치를 공유하기 위해 필요합니다."
+            }
+        },
+        "android": {
+            "package": "com.locationmessenger.app",
+            "permissions": [
+                "ACCESS_COARSE_LOCATION",
+                "ACCESS_FINE_LOCATION",
+                "ACCESS_BACKGROUND_LOCATION"
+            ]
+        },
+        "plugins": [
+            [
+                "expo-location",
+                {
+                    "locationAlwaysAndWhenInUsePermission": "위치 공유를 위해 위치 접근 권한이 필요합니다."
+                }
+            ],
+            [
+                "@mj-studio/react-native-naver-map",
+                {
+                    "client_id": "bbu6jg0rj4"
+                }
+            ],
+            [
+                "expo-build-properties",
+                {
+                    "android": {
+                        "extraMavenRepos": ["https://repository.map.naver.com/archive/maven"]
+                    }
+                }
+            ]
+        ]
+    }
 }

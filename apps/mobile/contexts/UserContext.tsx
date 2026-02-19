@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'expo-crypto'
 import { User, CharacterType, RoomInfo } from '@location-messenger/shared'
 
 const USER_STORAGE_KEY = '@user_data'
@@ -59,7 +59,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }
 
   const onboard = async (name: string, characterType: CharacterType, characterColor: string) => {
-    const tempId = uuidv4()
+    const tempId = randomUUID()
     
     try {
       const response = await fetch(`${API_URL}/api/users/anonymous`, {
