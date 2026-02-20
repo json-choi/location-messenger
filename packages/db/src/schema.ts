@@ -31,7 +31,7 @@ export const users = pgTable('users', {
   email: text('email').unique(),
   name: text('name'),
   avatar: text('avatar'),
-  characterType: text('characterType').notNull().default('cat'),
+  characterType: text('characterType').notNull().default('boy_casual'),
   characterColor: text('characterColor').notNull().default('#FF6B6B'),
   locationSharingEnabled: boolean('locationSharingEnabled').notNull().default(true),
   isAnonymous: boolean('isAnonymous').notNull().default(false),

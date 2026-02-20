@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ScrollView, Switch, Alert } from "react-native";
+import { ScrollView, Switch, Alert, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,9 +7,8 @@ import { useUser, useLocation } from "../../contexts";
 import {
     CharacterType,
     CHARACTER_TYPES,
-    CHARACTER_EMOJIS,
     CHARACTER_NAMES,
-    CHARACTER_COLORS,
+    CHARACTER_GENDER,
 } from "@location-messenger/shared";
 import { colors } from "../../constants/design";
 import {
@@ -23,6 +22,10 @@ import {
     Pressable,
     Spinner,
 } from "../../components/ui";
+import CharacterSprite from "../../components/CharacterSprite";
+
+const MALE_TYPES = CHARACTER_TYPES.filter((t) => CHARACTER_GENDER[t] === 'male')
+const FEMALE_TYPES = CHARACTER_TYPES.filter((t) => CHARACTER_GENDER[t] === 'female')
 
 export default function ProfileScreen() {
     const { user, logout, updateCharacter, toggleLocationSharing, updateProfile } = useUser();
@@ -34,12 +37,6 @@ export default function ProfileScreen() {
     const handleCharacterSelect = async (type: CharacterType) => {
         if (user) {
             await updateCharacter(type, user.characterColor);
-        }
-    };
-
-    const handleColorSelect = async (color: string) => {
-        if (user) {
-            await updateCharacter(user.characterType, color);
         }
     };
 
@@ -89,11 +86,13 @@ export default function ProfileScreen() {
             </Box>
 
             <HStack className="items-center bg-background-0 px-5 py-5 mb-3 border-b border-outline-100">
-                <Box
-                    className="w-20 h-20 rounded-full border-4 justify-center items-center bg-background-0 mr-4 shadow-soft-1"
-                    style={{ borderColor: user.characterColor }}
-                >
-                    <Text className="text-4xl">{CHARACTER_EMOJIS[user.characterType]}</Text>
+                <Box className="mr-4">
+                    <CharacterSprite
+                        type={user.characterType}
+                        direction="south"
+                        animation="idle"
+                        size={72}
+                    />
                 </Box>
                 <VStack className="flex-1">
                     {isEditing ? (
@@ -135,46 +134,39 @@ export default function ProfileScreen() {
                 space="md"
             >
                 <Heading size="md">캐릭터 선택</Heading>
-                <HStack className="flex-wrap -mx-2">
-                    {CHARACTER_TYPES.map((type) => (
+                <Text size="sm" className="text-typography-500">남자</Text>
+                <HStack style={profileStyles.characterRow}>
+                    {MALE_TYPES.map((type) => (
                         <Pressable
                             key={type}
-                            className={`w-1/3 items-center py-3 px-2 rounded-xl border-2 ${
-                                user.characterType === type
-                                    ? "border-secondary-500 bg-secondary-50"
-                                    : "border-transparent"
-                            }`}
+                            style={[
+                                profileStyles.characterCard,
+                                user.characterType === type && profileStyles.characterCardSelected,
+                            ]}
                             onPress={() => handleCharacterSelect(type)}
                         >
-                            <Text className="text-3xl mb-1">{CHARACTER_EMOJIS[type]}</Text>
-                            <Text size="sm" className="text-typography-600">
+                            <CharacterSprite type={type} direction="south" animation="idle" size={56} />
+                            <Text size="xs" className="text-typography-600 mt-1 text-center">
                                 {CHARACTER_NAMES[type]}
                             </Text>
                         </Pressable>
                     ))}
                 </HStack>
-            </VStack>
-
-            <VStack
-                className="bg-background-0 mb-3 px-5 py-5 border-y border-outline-100"
-                space="md"
-            >
-                <Heading size="md">캐릭터 색상</Heading>
-                <HStack className="flex-wrap -mx-1.5">
-                    {CHARACTER_COLORS.map((color) => (
+                <Text size="sm" className="text-typography-500">여자</Text>
+                <HStack style={profileStyles.characterRow}>
+                    {FEMALE_TYPES.map((type) => (
                         <Pressable
-                            key={color}
-                            className={`w-11 h-11 rounded-full m-1.5 justify-center items-center ${
-                                user.characterColor === color
-                                    ? "border-[3px] border-typography-900"
-                                    : ""
-                            }`}
-                            style={{ backgroundColor: color }}
-                            onPress={() => handleColorSelect(color)}
+                            key={type}
+                            style={[
+                                profileStyles.characterCard,
+                                user.characterType === type && profileStyles.characterCardSelected,
+                            ]}
+                            onPress={() => handleCharacterSelect(type)}
                         >
-                            {user.characterColor === color && (
-                                <Ionicons name="checkmark" size={20} color="#FFF" />
-                            )}
+                            <CharacterSprite type={type} direction="south" animation="idle" size={56} />
+                            <Text size="xs" className="text-typography-600 mt-1 text-center">
+                                {CHARACTER_NAMES[type]}
+                            </Text>
                         </Pressable>
                     ))}
                 </HStack>
@@ -238,3 +230,23 @@ export default function ProfileScreen() {
         </ScrollView>
     );
 }
+
+const profileStyles = StyleSheet.create({
+    characterRow: {
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    characterCard: {
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 6,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: 'transparent',
+        width: '30%',
+    },
+    characterCardSelected: {
+        borderColor: '#6366F1',
+        backgroundColor: '#EEF2FF',
+    },
+})

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { User, CharacterType, RoomInfo } from '@location-messenger/shared'
+import { User, CharacterType, RoomInfo, CHARACTER_TYPES } from '@location-messenger/shared'
 
 const USER_STORAGE_KEY = '@user_data'
 const ROOM_STORAGE_KEY = '@current_room'
@@ -38,6 +38,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const userData = await AsyncStorage.getItem(USER_STORAGE_KEY)
       if (userData) {
         const parsed = JSON.parse(userData)
+        if (!CHARACTER_TYPES.includes(parsed.characterType)) {
+          parsed.characterType = 'boy_casual' as CharacterType
+          await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(parsed))
+        }
         setUser(parsed)
       }
     } catch (error) {

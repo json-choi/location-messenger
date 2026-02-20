@@ -210,13 +210,19 @@ async function handleRoomChat(ws: any, msg: { type: 'room_chat'; roomCode: strin
     })
   }
 
-  broadcastToRoom(msg.roomCode, {
+  const outMsg = {
     type: 'room_chat',
     roomCode: msg.roomCode,
     senderId: msg.senderId,
     content: msg.content,
     timestamp: Date.now(),
-  })
+  }
+
+  try {
+    ws.send(outMsg)
+  } catch (e) {}
+
+  broadcastToRoom(msg.roomCode, outMsg, ws.id)
 }
 
 async function handleSetDestination(ws: any, msg: { type: 'set_destination'; roomCode: string; lat: number; lng: number; name?: string }) {

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
-import { ScrollView, KeyboardAvoidingView, Platform, Share, Alert, Modal } from "react-native";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { ScrollView, KeyboardAvoidingView, Platform, Share, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import MapView, { Marker, Circle, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
@@ -10,7 +10,6 @@ import {
     calculateDistance,
     calculateETA,
     formatETA,
-    RoomInfo,
 } from "@location-messenger/shared";
 import { useUser, useWebSocket, useLocation } from "../../contexts";
 import CharacterMarker from "../../components/CharacterMarker";
@@ -19,7 +18,6 @@ import {
     VStack,
     HStack,
     Text,
-    Heading,
     Input,
     InputField,
     Button,
@@ -36,12 +34,6 @@ const DRAG_BAR_HEIGHT = 24;
 const MIN_CHAT_HEIGHT = 80;
 const MAX_CHAT_HEIGHT = 400;
 
-interface DestinationInput {
-    lat: number;
-    lng: number;
-    name: string;
-}
-
 export default function MapScreen() {
     const router = useRouter();
     const { user, currentRoom, setCurrentRoom, verifyUser } = useUser();
@@ -52,15 +44,14 @@ export default function MapScreen() {
         isConnected,
         connect,
         joinRoom,
+        leaveRoom,
         sendRoomChat,
     } = useWebSocket();
     const { currentLocation, requestPermission } = useLocation();
 
     const [chatInput, setChatInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [showDestinationModal, setShowDestinationModal] = useState(false);
-    const [pendingDestination, setPendingDestination] = useState<DestinationInput | null>(null);
-    const [destinationName, setDestinationName] = useState("");
+    const [isSelectingDestination, setIsSelectingDestination] = useState(false);
 
     const chatHeight = useSharedValue(MIN_CHAT_HEIGHT);
     const scrollViewRef = useRef<ScrollView>(null);
@@ -95,6 +86,7 @@ export default function MapScreen() {
     const markers: MapMarker[] = useMemo(() => {
         const roomMembers = roomInfo?.members || [];
         return roomMembers
+            .filter((member) => member.userId !== user?.id)
             .map((member) => {
                 const location = friendLocations[member.userId];
                 return {
@@ -107,10 +99,20 @@ export default function MapScreen() {
                     name: member.user?.name || "익명",
                     isOnline: !!location,
                     lastSeen: location?.timestamp,
+                    direction: location?.direction,
+                    isMoving: location?.isMoving && Date.now() - (location.timestamp || 0) < 5000,
                 };
             })
             .filter((m) => m.lat !== 0);
-    }, [roomInfo, friendLocations]);
+    }, [roomInfo, friendLocations, user?.id]);
+
+    const getMemberName = useCallback(
+        (senderId: string) => {
+            const member = roomInfo?.members.find((m) => m.userId === senderId);
+            return member?.user?.name || senderId.substring(0, 4);
+        },
+        [roomInfo],
+    );
 
     const myEta = useMemo(() => {
         if (!currentLocation || !roomInfo?.destinationLat || !roomInfo?.destinationLng) return null;
@@ -187,27 +189,44 @@ export default function MapScreen() {
         setChatInput("");
     };
 
-    const setDestination = async () => {
-        if (!pendingDestination || !currentRoom) return;
-
+    const saveDestination = async (lat: number, lng: number) => {
+        if (!currentRoom) return;
+        setIsSelectingDestination(false);
         try {
             await fetch(`${API_URL}/api/rooms/${currentRoom.code}/destination`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    lat: pendingDestination.lat,
-                    lng: pendingDestination.lng,
-                    name: destinationName || "목표지점",
-                }),
+                body: JSON.stringify({ lat, lng, name: "목표지점" }),
             });
-
-            setShowDestinationModal(false);
-            setPendingDestination(null);
-            setDestinationName("");
         } catch (error) {
             console.error("Failed to set destination:", error);
             Alert.alert("오류", "목표지점 설정에 실패했습니다.");
         }
+    };
+
+    const leaveCurrentRoom = async () => {
+        if (!currentRoom || !user) return;
+
+        Alert.alert("방 나가기", "정말 방을 나가시겠어요?", [
+            { text: "취소", style: "cancel" },
+            {
+                text: "나가기",
+                style: "destructive",
+                onPress: async () => {
+                    try {
+                        await fetch(`${API_URL}/api/rooms/${currentRoom.code}/leave`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ userId: user.id }),
+                        });
+                    } catch (error) {
+                        console.error("Failed to leave room:", error);
+                    }
+                    leaveRoom(user.id, currentRoom.code);
+                    setCurrentRoom(null);
+                },
+            },
+        ]);
     };
 
     const clearDestination = async () => {
@@ -225,16 +244,10 @@ export default function MapScreen() {
     };
 
     const handleMapLongPress = (event: any) => {
-        if (!currentRoom) {
-            Alert.alert("알림", "먼저 방을 만들어주세요.");
-            return;
-        }
-
+        if (!currentRoom || !isSelectingDestination) return;
         const { latitude, longitude } = event.nativeEvent.coordinate || {};
         if (latitude && longitude) {
-            setPendingDestination({ lat: latitude, lng: longitude, name: "" });
-            setDestinationName("");
-            setShowDestinationModal(true);
+            saveDestination(latitude, longitude);
         }
     };
 
@@ -271,7 +284,7 @@ export default function MapScreen() {
                     latitudeDelta: 0.01,
                     longitudeDelta: 0.01,
                 }}
-                showsUserLocation
+                showsUserLocation={false}
                 onLongPress={handleMapLongPress}
             >
                 {roomInfo?.destinationLat && roomInfo?.destinationLng && (
@@ -299,6 +312,42 @@ export default function MapScreen() {
                     </>
                 )}
 
+                {currentLocation &&
+                    user &&
+                    (() => {
+                        const heading = currentLocation.coords.heading || 0;
+                        const speed = currentLocation.coords.speed || 0;
+                        let direction: any = "south";
+                        if (heading >= 337.5 || heading < 22.5) direction = "north";
+                        else if (heading >= 22.5 && heading < 67.5) direction = "north-east";
+                        else if (heading >= 67.5 && heading < 112.5) direction = "east";
+                        else if (heading >= 112.5 && heading < 157.5) direction = "south-east";
+                        else if (heading >= 157.5 && heading < 202.5) direction = "south";
+                        else if (heading >= 202.5 && heading < 247.5) direction = "south-west";
+                        else if (heading >= 247.5 && heading < 292.5) direction = "west";
+                        else if (heading >= 292.5 && heading < 337.5) direction = "north-west";
+
+                        return (
+                            <Marker
+                                coordinate={{
+                                    latitude: currentLocation.coords.latitude,
+                                    longitude: currentLocation.coords.longitude,
+                                }}
+                                title="내 위치"
+                                zIndex={999}
+                            >
+                                <CharacterMarker
+                                    type={user.characterType}
+                                    color={user.characterColor}
+                                    name="나"
+                                    isOnline={true}
+                                    direction={direction}
+                                    isMoving={speed > 0.5}
+                                />
+                            </Marker>
+                        );
+                    })()}
+
                 {markers.map((marker) => (
                     <Marker
                         key={marker.id}
@@ -310,6 +359,8 @@ export default function MapScreen() {
                             color={marker.characterColor}
                             name={marker.name}
                             isOnline={marker.isOnline}
+                            direction={marker.direction}
+                            isMoving={marker.isMoving}
                         />
                     </Marker>
                 ))}
@@ -321,6 +372,20 @@ export default function MapScreen() {
                         <Spinner size="small" color={colors.secondary.DEFAULT} />
                         <Text size="md" className="ml-3 text-typography-600">
                             위치 불러오는 중...
+                        </Text>
+                    </HStack>
+                </Box>
+            )}
+
+            {isSelectingDestination && (
+                <Box
+                    className="absolute top-[120px] left-5 right-5 items-center"
+                    pointerEvents="none"
+                >
+                    <HStack className="bg-warning-500 px-5 py-3 rounded-2xl items-center shadow-hard-2">
+                        <Text className="text-lg mr-2">🎯</Text>
+                        <Text size="sm" bold className="text-typography-0">
+                            지도를 길게 눌러 목표지점을 찍어주세요
                         </Text>
                     </HStack>
                 </Box>
@@ -343,9 +408,15 @@ export default function MapScreen() {
                         </VStack>
                         <Pressable
                             onPress={shareRoomLink}
-                            className="w-8 h-8 bg-primary-50 rounded-full items-center justify-center"
+                            className="w-8 h-8 bg-primary-50 rounded-full items-center justify-center mr-1"
                         >
                             <Text size="sm">🔗</Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={leaveCurrentRoom}
+                            className="w-8 h-8 bg-error-50 rounded-full items-center justify-center"
+                        >
+                            <Text size="sm">🚪</Text>
                         </Pressable>
                     </HStack>
                 )}
@@ -383,21 +454,13 @@ export default function MapScreen() {
                 <Box pointerEvents="box-none" className="absolute bottom-[120px] right-5 items-end">
                     {!roomInfo?.destinationLat ? (
                         <Pressable
-                            className="h-12 px-4 bg-secondary-500 rounded-full flex-row items-center justify-center shadow-hard-2"
-                            onPress={() => {
-                                if (currentLocation) {
-                                    setPendingDestination({
-                                        lat: currentLocation.coords.latitude + 0.001,
-                                        lng: currentLocation.coords.longitude + 0.001,
-                                        name: "",
-                                    });
-                                    setDestinationName("");
-                                    setShowDestinationModal(true);
-                                }
-                            }}
+                            className={`h-12 px-4 rounded-full flex-row items-center justify-center shadow-hard-2 ${isSelectingDestination ? "bg-warning-500" : "bg-secondary-500"}`}
+                            onPress={() => setIsSelectingDestination((v) => !v)}
                         >
                             <Text className="text-lg mr-1">🎯</Text>
-                            <Text className="text-typography-0 font-bold">목표지점</Text>
+                            <Text className="text-typography-0 font-bold">
+                                {isSelectingDestination ? "취소" : "목표지점"}
+                            </Text>
                         </Pressable>
                     ) : (
                         <Pressable
@@ -410,51 +473,6 @@ export default function MapScreen() {
                     )}
                 </Box>
             )}
-
-            {/* Destination Modal */}
-            <Modal
-                visible={showDestinationModal}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowDestinationModal(false)}
-            >
-                <Box className="flex-1 bg-background-950/50 justify-center items-center">
-                    <VStack
-                        className="bg-background-0 rounded-2xl p-6 w-[85%] max-w-[320px]"
-                        space="md"
-                    >
-                        <Heading size="xl" className="text-center">
-                            목표지점 설정
-                        </Heading>
-                        <Text size="md" className="text-typography-600 text-center mb-2">
-                            목표지점의 이름을 입력하세요
-                        </Text>
-                        <Input size="lg" variant="outline" className="mb-2">
-                            <InputField
-                                value={destinationName}
-                                onChangeText={setDestinationName}
-                                placeholder="예: 강남역, 우리 집..."
-                                autoFocus
-                            />
-                        </Input>
-                        <HStack space="md">
-                            <Button
-                                variant="outline"
-                                className="flex-1"
-                                onPress={() => {
-                                    setShowDestinationModal(false);
-                                    setPendingDestination(null);
-                                }}
-                            >
-                                <ButtonText>취소</ButtonText>
-                            </Button>
-                            <Button className="flex-1 bg-secondary-500" onPress={setDestination}>
-                                <ButtonText>설정</ButtonText>
-                            </Button>
-                        </HStack>
-                    </VStack>
-                </Box>
-            </Modal>
 
             {/* Chat Panel */}
             <Animated.View
@@ -485,7 +503,7 @@ export default function MapScreen() {
                                 >
                                     {!msg.isMine && (
                                         <Text size="2xs" className="text-typography-500 mb-0.5">
-                                            {msg.senderId.substring(0, 4)}
+                                            {getMemberName(msg.senderId)}
                                         </Text>
                                     )}
                                     <Text

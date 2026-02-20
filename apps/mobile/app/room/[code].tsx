@@ -97,7 +97,7 @@ export default function RoomScreen() {
         if (!name.trim()) return;
         setIsJoining(true);
         try {
-            await onboard(name.trim(), "cat", "#FF6B6B");
+            await onboard(name.trim(), "boy_casual", "#FF6B6B");
             setNeedsOnboarding(false);
         } catch (err) {
             console.error("Failed to onboard:", err);

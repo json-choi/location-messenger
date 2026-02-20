@@ -77,6 +77,8 @@ export default function SmartMap({
                                 color={marker.characterColor}
                                 name={marker.name}
                                 isOnline={marker.isOnline}
+                                direction={marker.direction}
+                                isMoving={marker.isMoving}
                             />
                         </NaverMapMarkerOverlay>
                     ))}
@@ -105,6 +107,8 @@ export default function SmartMap({
                             color={marker.characterColor}
                             name={marker.name}
                             isOnline={marker.isOnline}
+                            direction={marker.direction}
+                            isMoving={marker.isMoving}
                         />
                     </Marker>
                 ))}
