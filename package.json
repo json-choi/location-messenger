@@ -1,5 +1,5 @@
 {
-    "name": "location-messenger",
+    "name": "yogiya",
     "private": true,
     "workspaces": [
         "apps/*",
@@ -7,13 +7,13 @@
     ],
     "scripts": {
         "dev": "concurrently \"bun run dev:ws\" \"bun run dev:api\" ",
-        "dev:ws": "bun run --filter @location-messenger/ws-server dev",
-        "dev:api": "bun run --filter @location-messenger/api dev",
-        "dev:mobile": "bun run --filter @location-messenger/mobile dev",
-        "db:generate": "bun run --filter @location-messenger/db generate",
-        "db:push": "bun run --filter @location-messenger/db db:push",
-        "db:migrate": "bun run --filter @location-messenger/db db:migrate",
-        "db:studio": "bun run --filter @location-messenger/db studio"
+        "dev:ws": "bun run --filter @yogiya/ws-server dev",
+        "dev:api": "bun run --filter @yogiya/api dev",
+        "dev:mobile": "bun run --filter @yogiya/mobile dev",
+        "db:generate": "bun run --filter @yogiya/db generate",
+        "db:push": "bun run --filter @yogiya/db db:push",
+        "db:migrate": "bun run --filter @yogiya/db db:migrate",
+        "db:studio": "bun run --filter @yogiya/db studio"
     },
     "devDependencies": {
         "concurrently": "^9.2.1",

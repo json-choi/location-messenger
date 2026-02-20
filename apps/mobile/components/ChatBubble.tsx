@@ -1,6 +1,7 @@
-import { CharacterType, CHARACTER_EMOJIS } from '@location-messenger/shared'
+import { CharacterType } from '@yogiya/shared'
 import React from 'react'
-import { Text, View } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
+import CharacterSprite from './CharacterSprite'
 
 interface ChatBubbleProps {
   content: string
@@ -14,11 +15,11 @@ interface ChatBubbleProps {
 
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp)
-  const hours = date.getHours()
-  const minutes = date.getMinutes()
-  const period = hours >= 12 ? '오후' : '오전'
-  const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
-  return `${period} ${displayHours}:${minutes.toString().padStart(2, '0')}`
+  const h = date.getHours()
+  const m = date.getMinutes()
+  const period = h >= 12 ? '오후' : '오전'
+  const dh = h > 12 ? h - 12 : h === 0 ? 12 : h
+  return `${period} ${dh}:${m.toString().padStart(2, '0')}`
 }
 
 export default function ChatBubble({
@@ -30,43 +31,58 @@ export default function ChatBubble({
   senderColor,
   showSender = false,
 }: ChatBubbleProps) {
-  const emoji = senderCharacter ? CHARACTER_EMOJIS[senderCharacter] : null
-
   return (
-    <View className={`my-1 mx-3 max-w-[80%] ${isMine ? 'self-end' : 'self-start'}`}>
+    <View style={[s.wrap, isMine ? s.wrapMine : s.wrapTheirs]}>
       {!isMine && showSender && senderName && (
-        <View className="flex-row items-center mb-1 ml-1">
-          {emoji && <Text className="text-base mr-1">{emoji}</Text>}
-          <Text
-            className="text-xs font-semibold text-typography-600"
-            style={senderColor ? { color: senderColor } : undefined}
-          >
+        <View style={s.senderRow}>
+          {senderCharacter && (
+            <View style={s.senderAvatar}>
+              <CharacterSprite type={senderCharacter} size={16} />
+            </View>
+          )}
+          <Text style={[s.senderName, senderColor ? { color: senderColor } : undefined]}>
             {senderName}
           </Text>
         </View>
       )}
-      <View
-        className={`px-4 py-3 rounded-2xl ${
-          isMine
-            ? 'bg-secondary-500 rounded-br-sm'
-            : 'bg-background-100 rounded-bl-sm'
-        }`}
-      >
-        <Text
-          className={`text-sm leading-snug ${
-            isMine ? 'text-typography-0' : 'text-typography-900'
-          }`}
-        >
-          {content}
-        </Text>
+      <View style={isMine ? s.bubbleMine : s.bubbleTheirs}>
+        <Text style={isMine ? s.textMine : s.textTheirs}>{content}</Text>
       </View>
       {timestamp && (
-        <Text
-          className={`text-[10px] mt-1 text-typography-400 ${isMine ? 'text-right' : 'text-left ml-1'}`}
-        >
+        <Text style={[s.time, isMine ? s.timeMine : s.timeTheirs]}>
           {formatTime(timestamp)}
         </Text>
       )}
     </View>
   )
 }
+
+const s = StyleSheet.create({
+  wrap: { marginVertical: 2, marginHorizontal: 16, maxWidth: '80%' },
+  wrapMine: { alignSelf: 'flex-end' },
+  wrapTheirs: { alignSelf: 'flex-start' },
+  senderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 3, marginLeft: 2 },
+  senderAvatar: { width: 16, height: 16, borderRadius: 8, overflow: 'hidden', backgroundColor: '#18181B', marginRight: 4 },
+  senderName: { fontSize: 11, fontWeight: '600', color: '#71717A' },
+  bubbleMine: {
+    backgroundColor: '#2563EB',
+    borderRadius: 18,
+    borderBottomRightRadius: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  bubbleTheirs: {
+    backgroundColor: '#18181B',
+    borderRadius: 18,
+    borderBottomLeftRadius: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: '#27272A',
+  },
+  textMine: { fontSize: 14, lineHeight: 20, color: '#FFFFFF' },
+  textTheirs: { fontSize: 14, lineHeight: 20, color: '#F4F4F5' },
+  time: { fontSize: 10, marginTop: 3, color: '#3F3F46' },
+  timeMine: { textAlign: 'right' },
+  timeTheirs: { textAlign: 'left', marginLeft: 2 },
+})

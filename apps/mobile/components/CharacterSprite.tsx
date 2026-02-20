@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { Canvas, Image, useImage } from "@shopify/react-native-skia";
-import { CharacterType, CharacterDirection } from "@location-messenger/shared";
+import { CharacterType, CharacterDirection } from "@yogiya/shared";
 import { AnimationName, getCharacterFrames, getCharacterRotation } from "../lib/characters";
 
 const IDLE_FPS = 8;

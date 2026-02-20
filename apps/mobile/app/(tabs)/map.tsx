@@ -1,32 +1,16 @@
-import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
-import { ScrollView, KeyboardAvoidingView, Platform, Share, Alert } from "react-native";
-import { useRouter } from "expo-router";
-import MapView, { Marker, Circle, PROVIDER_GOOGLE, Region } from "react-native-maps";
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
-import { GestureHandlerRootView, GestureDetector, Gesture } from "react-native-gesture-handler";
-import {
-    MapMarker,
-    CHARACTER_EMOJIS,
-    calculateDistance,
-    calculateETA,
-    formatETA,
-} from "@location-messenger/shared";
-import { useUser, useWebSocket, useLocation } from "../../contexts";
-import CharacterMarker from "../../components/CharacterMarker";
-import {
-    Box,
-    VStack,
-    HStack,
-    Text,
-    Input,
-    InputField,
-    Button,
-    ButtonText,
-    ButtonSpinner,
-    Pressable,
-    Spinner,
-} from "../../components/ui";
-import { colors } from "../../constants/design";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { ScrollView, KeyboardAvoidingView, Share, Alert, View, Text as RNText, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
+import { useRouter } from 'expo-router'
+import MapView, { Marker, Circle, PROVIDER_GOOGLE, Region } from 'react-native-maps'
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated'
+import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler'
+import { Link2, LogOut, MapPin, Navigation, Send, X } from 'lucide-react-native'
+import { MapMarker, calculateDistance, calculateETA, formatETA } from '@yogiya/shared'
+import { useUser, useWebSocket, useLocation } from '../../contexts'
+import CharacterMarker from '../../components/CharacterMarker'
+import { calcDirection } from '../../lib/direction'
+import { colors } from '../../constants/design'
+import { naverMapStyle } from '../../constants/mapStyle'
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -47,7 +31,7 @@ export default function MapScreen() {
         leaveRoom,
         sendRoomChat,
     } = useWebSocket();
-    const { currentLocation, requestPermission } = useLocation();
+    const { currentLocation, isTracking, startRoomTracking, stopRoomTracking } = useLocation();
 
     const [chatInput, setChatInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -56,16 +40,24 @@ export default function MapScreen() {
     const chatHeight = useSharedValue(MIN_CHAT_HEIGHT);
     const scrollViewRef = useRef<ScrollView>(null);
     const mapRef = useRef<MapView>(null);
+    const prevLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+    const myDirectionRef = useRef<import("@yogiya/shared").CharacterDirection>("south");
 
-    useEffect(() => {
-        requestPermission();
-    }, []);
+
 
     useEffect(() => {
         if (user && !isConnected) {
             connect(user.id);
         }
     }, [user, isConnected]);
+
+    useEffect(() => {
+        if (currentRoom) {
+            startRoomTracking(currentRoom.code)
+        } else {
+            stopRoomTracking()
+        }
+    }, [currentRoom?.code]);
 
     useEffect(() => {
         if (roomMessages.length > 0 && scrollViewRef.current) {
@@ -89,22 +81,57 @@ export default function MapScreen() {
             .filter((member) => member.userId !== user?.id)
             .map((member) => {
                 const location = friendLocations[member.userId];
+                if (!location) return null;
                 return {
                     id: `marker-${member.userId}`,
                     userId: member.userId,
-                    lat: location?.lat || 0,
-                    lng: location?.lng || 0,
-                    characterType: member.user?.characterType || "cat",
+                    lat: location.lat,
+                    lng: location.lng,
+                    characterType: member.user?.characterType || "boy_casual",
                     characterColor: member.user?.characterColor || "#FF6B6B",
                     name: member.user?.name || "익명",
-                    isOnline: !!location,
-                    lastSeen: location?.timestamp,
-                    direction: location?.direction,
-                    isMoving: location?.isMoving && Date.now() - (location.timestamp || 0) < 5000,
+                    isOnline: true,
+                    lastSeen: location.timestamp,
+                    direction: location.direction,
+                    isMoving: location.isMoving && Date.now() - (location.timestamp || 0) < 5000,
                 };
             })
-            .filter((m) => m.lat !== 0);
+            .filter((m): m is NonNullable<typeof m> => m !== null);
     }, [roomInfo, friendLocations, user?.id]);
+
+    useEffect(() => {
+        if (!currentRoom || !currentLocation || !roomInfo) return;
+        const members = roomInfo.members.filter((m) => m.userId !== user?.id);
+        if (members.length === 0) return;
+
+        const myLat = currentLocation.coords.latitude;
+        const myLng = currentLocation.coords.longitude;
+
+        const allMet = members.every((member) => {
+            const loc = friendLocations[member.userId];
+            if (!loc) return false;
+            return calculateDistance(myLat, myLng, loc.lat, loc.lng) * 1000 <= 1;
+        });
+
+        if (allMet) {
+            Alert.alert('🎉 만났어요!', '모든 멤버가 같은 위치에 모였습니다. 위치 공유를 종료합니다.', [
+                {
+                    text: '확인',
+                    onPress: async () => {
+                        try {
+                            await fetch(`${API_URL}/api/rooms/${currentRoom.code}/leave`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: user!.id }),
+                            });
+                        } catch {}
+                        leaveRoom(user!.id, currentRoom.code);
+                        setCurrentRoom(null);
+                    },
+                },
+            ]);
+        }
+    }, [currentLocation, friendLocations]);
 
     const getMemberName = useCallback(
         (senderId: string) => {
@@ -175,7 +202,7 @@ export default function MapScreen() {
         const link = `locationmessenger://room/${currentRoom.code}`;
         try {
             await Share.share({
-                message: `내 위치를 확인하세요! 👋\n\n${link}`,
+                message: `내 위치를 확인하세요!\n\n${link}`,
                 title: "위치 공유 초대",
             });
         } catch (error) {
@@ -272,12 +299,12 @@ export default function MapScreen() {
     }));
 
     return (
-        <GestureHandlerRootView className="flex-1 bg-background-0">
-            {/* Map */}
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#09090B' }}>
             <MapView
                 ref={mapRef}
                 style={{ flex: 1 }}
-                provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+                provider={process.env.EXPO_OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                customMapStyle={naverMapStyle}
                 initialRegion={{
                     latitude: region?.latitude || 37.5665,
                     longitude: region?.longitude || 126.978,
@@ -290,70 +317,51 @@ export default function MapScreen() {
                 {roomInfo?.destinationLat && roomInfo?.destinationLng && (
                     <>
                         <Marker
-                            coordinate={{
-                                latitude: roomInfo.destinationLat,
-                                longitude: roomInfo.destinationLng,
-                            }}
-                            title={roomInfo.destinationName || "목표지점"}
+                            coordinate={{ latitude: roomInfo.destinationLat, longitude: roomInfo.destinationLng }}
+                            title={roomInfo.destinationName || '목표지점'}
                         >
-                            <Box className="w-10 h-10 justify-center items-center">
-                                <Text className="text-3xl">🎯</Text>
-                            </Box>
+                            <View style={ms.destMarker}>
+                                <MapPin size={28} color={colors.error} fill={colors.error} strokeWidth={1} />
+                            </View>
                         </Marker>
                         <Circle
-                            center={{
-                                latitude: roomInfo.destinationLat,
-                                longitude: roomInfo.destinationLng,
-                            }}
+                            center={{ latitude: roomInfo.destinationLat, longitude: roomInfo.destinationLng }}
                             radius={100}
-                            fillColor="rgba(0, 165, 207, 0.2)"
-                            strokeColor="rgba(0, 165, 207, 0.5)"
+                            fillColor="rgba(59,130,246,0.1)"
+                            strokeColor="rgba(59,130,246,0.4)"
                         />
                     </>
                 )}
 
-                {currentLocation &&
-                    user &&
-                    (() => {
-                        const heading = currentLocation.coords.heading || 0;
-                        const speed = currentLocation.coords.speed || 0;
-                        let direction: any = "south";
-                        if (heading >= 337.5 || heading < 22.5) direction = "north";
-                        else if (heading >= 22.5 && heading < 67.5) direction = "north-east";
-                        else if (heading >= 67.5 && heading < 112.5) direction = "east";
-                        else if (heading >= 112.5 && heading < 157.5) direction = "south-east";
-                        else if (heading >= 157.5 && heading < 202.5) direction = "south";
-                        else if (heading >= 202.5 && heading < 247.5) direction = "south-west";
-                        else if (heading >= 247.5 && heading < 292.5) direction = "west";
-                        else if (heading >= 292.5 && heading < 337.5) direction = "north-west";
-
-                        return (
-                            <Marker
-                                coordinate={{
-                                    latitude: currentLocation.coords.latitude,
-                                    longitude: currentLocation.coords.longitude,
-                                }}
-                                title="내 위치"
-                                zIndex={999}
-                            >
-                                <CharacterMarker
-                                    type={user.characterType}
-                                    color={user.characterColor}
-                                    name="나"
-                                    isOnline={true}
-                                    direction={direction}
-                                    isMoving={speed > 0.5}
-                                />
-                            </Marker>
-                        );
-                    })()}
+                {currentLocation && user && (() => {
+                    const lat = currentLocation.coords.latitude
+                    const lng = currentLocation.coords.longitude
+                    const speed = currentLocation.coords.speed || 0
+                    const prev = prevLocationRef.current
+                    if (prev) {
+                        const dx = lng - prev.lng
+                        const dy = lat - prev.lat
+                        if (Math.sqrt(dx * dx + dy * dy) > 0.00001) {
+                            myDirectionRef.current = calcDirection(dx, dy)
+                        }
+                    }
+                    prevLocationRef.current = { lat, lng }
+                    return (
+                        <Marker coordinate={{ latitude: lat, longitude: lng }} title="내 위치" zIndex={999}>
+                            <CharacterMarker
+                                type={user.characterType}
+                                color={user.characterColor}
+                                name="나"
+                                isOnline={true}
+                                direction={myDirectionRef.current}
+                                isMoving={speed > 0.5}
+                            />
+                        </Marker>
+                    )
+                })()}
 
                 {markers.map((marker) => (
-                    <Marker
-                        key={marker.id}
-                        coordinate={{ latitude: marker.lat, longitude: marker.lng }}
-                        title={marker.name}
-                    >
+                    <Marker key={marker.id} coordinate={{ latitude: marker.lat, longitude: marker.lng }} title={marker.name}>
                         <CharacterMarker
                             type={marker.characterType}
                             color={marker.characterColor}
@@ -367,194 +375,300 @@ export default function MapScreen() {
             </MapView>
 
             {!currentLocation && (
-                <Box className="absolute top-0 left-0 right-0 bottom-0 justify-center items-center">
-                    <HStack className="bg-background-0/95 px-4 py-3 rounded-xl items-center shadow-soft-1">
-                        <Spinner size="small" color={colors.secondary.DEFAULT} />
-                        <Text size="md" className="ml-3 text-typography-600">
-                            위치 불러오는 중...
-                        </Text>
-                    </HStack>
-                </Box>
+                <View style={ms.loadingOverlay}>
+                    <View style={ms.loadingCard}>
+                        <ActivityIndicator size="small" color={colors.accent.DEFAULT} />
+                        <RNText style={ms.loadingText}>위치 불러오는 중...</RNText>
+                    </View>
+                </View>
             )}
 
             {isSelectingDestination && (
-                <Box
-                    className="absolute top-[120px] left-5 right-5 items-center"
-                    pointerEvents="none"
-                >
-                    <HStack className="bg-warning-500 px-5 py-3 rounded-2xl items-center shadow-hard-2">
-                        <Text className="text-lg mr-2">🎯</Text>
-                        <Text size="sm" bold className="text-typography-0">
-                            지도를 길게 눌러 목표지점을 찍어주세요
-                        </Text>
-                    </HStack>
-                </Box>
+                <View style={ms.destinationHint} pointerEvents="none">
+                    <View style={ms.destinationHintCard}>
+                        <Navigation size={16} color="#FAFAFA" strokeWidth={2} style={{ marginRight: 8 }} />
+                        <RNText style={ms.destinationHintText}>지도를 길게 눌러 목표지점을 찍어주세요</RNText>
+                    </View>
+                </View>
             )}
 
-            {/* Top Bar */}
-            <Box
-                pointerEvents="box-none"
-                className="absolute top-[50px] left-5 right-5 flex-row justify-between items-start"
-            >
+            <View style={ms.topBar} pointerEvents="box-none">
                 {currentRoom && (
-                    <HStack className="bg-background-0/95 pl-4 pr-2 py-2 rounded-2xl shadow-soft-1 items-center">
-                        <VStack className="mr-3">
-                            <Text size="sm" bold className="text-typography-900">
-                                방 코드: {currentRoom.code}
-                            </Text>
-                            <Text size="xs" className="text-typography-500">
-                                참여 {roomInfo?.members.length || 1}명
-                            </Text>
-                        </VStack>
-                        <Pressable
-                            onPress={shareRoomLink}
-                            className="w-8 h-8 bg-primary-50 rounded-full items-center justify-center mr-1"
-                        >
-                            <Text size="sm">🔗</Text>
-                        </Pressable>
-                        <Pressable
-                            onPress={leaveCurrentRoom}
-                            className="w-8 h-8 bg-error-50 rounded-full items-center justify-center"
-                        >
-                            <Text size="sm">🚪</Text>
-                        </Pressable>
-                    </HStack>
+                    <View style={ms.roomCard}>
+                        <View style={ms.roomInfo}>
+                            <RNText style={ms.roomCode}>방 코드: {currentRoom.code}</RNText>
+                            <RNText style={ms.roomCount}>
+                                참여 {roomInfo?.members.length ?? currentRoom.members?.length ?? 1}명
+                            </RNText>
+                        </View>
+                        <TouchableOpacity onPress={shareRoomLink} style={ms.topBarBtn} activeOpacity={0.7}>
+                            <Link2 size={15} color={colors.text.secondary} strokeWidth={1.75} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={leaveCurrentRoom} style={ms.topBarBtn} activeOpacity={0.7}>
+                            <LogOut size={15} color={colors.error} strokeWidth={1.75} />
+                        </TouchableOpacity>
+                    </View>
                 )}
                 {myEta && (
-                    <VStack className="bg-secondary-500/95 px-4 py-2.5 rounded-2xl items-center shadow-soft-1">
-                        <Text size="xs" className="text-typography-0/80">
-                            목표까지
-                        </Text>
-                        <Text size="lg" bold className="text-typography-0">
-                            {myEta.distance}km
-                        </Text>
-                        <Text size="xs" className="text-typography-0/90">
-                            약 {myEta.eta}
-                        </Text>
-                    </VStack>
+                    <View style={ms.etaCard}>
+                        <RNText style={ms.etaLabel}>목표까지</RNText>
+                        <RNText style={ms.etaDistance}>{myEta.distance}km</RNText>
+                        <RNText style={ms.etaTime}>약 {myEta.eta}</RNText>
+                    </View>
                 )}
-            </Box>
+            </View>
 
-            {/* Action Buttons */}
             {!currentRoom && (
-                <Box className="absolute bottom-[100px] left-5 right-5">
-                    <Button
-                        size="xl"
-                        className="w-full bg-primary-500 shadow-soft-1 rounded-2xl"
+                <View style={ms.createRoomWrap}>
+                    <TouchableOpacity
+                        style={[ms.createRoomBtn, isLoading && { opacity: 0.5 }]}
                         onPress={createRoom}
-                        isDisabled={isLoading}
+                        disabled={isLoading}
+                        activeOpacity={0.8}
                     >
-                        {isLoading ? <ButtonSpinner /> : <ButtonText>새 방 만들기</ButtonText>}
-                    </Button>
-                </Box>
+                        {isLoading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                            <RNText style={ms.createRoomText}>새 방 만들기</RNText>
+                        )}
+                    </TouchableOpacity>
+                </View>
             )}
 
-            {/* Floating Action Buttons */}
             {currentRoom && (
-                <Box pointerEvents="box-none" className="absolute bottom-[120px] right-5 items-end">
+                <View style={ms.fabWrap} pointerEvents="box-none">
                     {!roomInfo?.destinationLat ? (
-                        <Pressable
-                            className={`h-12 px-4 rounded-full flex-row items-center justify-center shadow-hard-2 ${isSelectingDestination ? "bg-warning-500" : "bg-secondary-500"}`}
+                        <TouchableOpacity
+                            style={[ms.fab, isSelectingDestination && ms.fabActive]}
                             onPress={() => setIsSelectingDestination((v) => !v)}
+                            activeOpacity={0.8}
                         >
-                            <Text className="text-lg mr-1">🎯</Text>
-                            <Text className="text-typography-0 font-bold">
-                                {isSelectingDestination ? "취소" : "목표지점"}
-                            </Text>
-                        </Pressable>
+                            <MapPin size={16} color="#FFFFFF" strokeWidth={2} style={{ marginRight: 6 }} />
+                            <RNText style={ms.fabText}>{isSelectingDestination ? '취소' : '목표지점'}</RNText>
+                        </TouchableOpacity>
                     ) : (
-                        <Pressable
-                            className="h-12 px-4 bg-background-0 rounded-full flex-row items-center justify-center shadow-hard-2 border border-outline-100"
-                            onPress={clearDestination}
-                        >
-                            <Text className="text-lg mr-1">✕</Text>
-                            <Text className="text-typography-900 font-bold">목표 삭제</Text>
-                        </Pressable>
+                        <TouchableOpacity style={ms.fabClear} onPress={clearDestination} activeOpacity={0.8}>
+                            <X size={16} color={colors.text.secondary} strokeWidth={1.75} style={{ marginRight: 6 }} />
+                            <RNText style={ms.fabClearText}>목표 삭제</RNText>
+                        </TouchableOpacity>
                     )}
-                </Box>
+                </View>
             )}
 
-            {/* Chat Panel */}
-            <Animated.View
-                className="absolute bottom-0 left-0 right-0 bg-background-0 rounded-t-3xl shadow-hard-5 border border-outline-100"
-                style={animatedStyle}
-            >
+            <Animated.View style={[animatedStyle, ms.chatPanel]}>
                 <GestureDetector gesture={gesture}>
-                    <Box className="h-6 justify-center items-center bg-transparent">
-                        <Box className="w-10 h-1.5 bg-outline-300 rounded-full" />
-                    </Box>
+                    <View style={ms.dragHandle}>
+                        <View style={ms.dragBar} />
+                    </View>
                 </GestureDetector>
 
                 {currentRoom ? (
                     <>
-                        <ScrollView
-                            ref={scrollViewRef}
-                            className="flex-1 px-4"
-                            contentContainerClassName="py-2"
-                        >
+                        <ScrollView ref={scrollViewRef} style={{ flex: 1 }} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}>
                             {roomMessages.map((msg) => (
-                                <Box
+                                <View
                                     key={msg.id}
-                                    className={`max-w-[80%] py-2 px-4 rounded-2xl my-1 ${
-                                        msg.isMine
-                                            ? "self-end bg-secondary-500 rounded-br-sm"
-                                            : "self-start bg-background-100 rounded-bl-sm"
-                                    }`}
+                                    style={[
+                                        ms.msgBubble,
+                                        msg.isMine ? ms.msgBubbleMine : ms.msgBubbleTheirs,
+                                    ]}
                                 >
                                     {!msg.isMine && (
-                                        <Text size="2xs" className="text-typography-500 mb-0.5">
-                                            {getMemberName(msg.senderId)}
-                                        </Text>
+                                        <RNText style={ms.msgSender}>{getMemberName(msg.senderId)}</RNText>
                                     )}
-                                    <Text
-                                        size="md"
-                                        className={
-                                            msg.isMine ? "text-typography-0" : "text-typography-900"
-                                        }
-                                    >
+                                    <RNText style={msg.isMine ? ms.msgTextMine : ms.msgTextTheirs}>
                                         {msg.content}
-                                    </Text>
-                                </Box>
+                                    </RNText>
+                                </View>
                             ))}
                         </ScrollView>
 
-                        <KeyboardAvoidingView
-                            behavior={Platform.OS === "ios" ? "padding" : undefined}
-                            keyboardVerticalOffset={0}
-                        >
-                            <HStack className="px-4 pb-4 pt-2 border-t border-outline-100 items-center">
-                                <Input
-                                    variant="outline"
-                                    size="md"
-                                    className="flex-1 mr-2 bg-background-50 rounded-full"
-                                >
-                                    <InputField
-                                        value={chatInput}
-                                        onChangeText={setChatInput}
-                                        placeholder="메시지 입력..."
-                                        onSubmitEditing={sendMessage}
-                                        returnKeyType="send"
-                                    />
-                                </Input>
-                                <Button
-                                    size="md"
-                                    className="rounded-full bg-secondary-500 px-5"
+                        <KeyboardAvoidingView behavior={process.env.EXPO_OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
+                            <View style={ms.chatInputBar}>
+                                <TextInput
+                                    style={ms.chatInput}
+                                    value={chatInput}
+                                    onChangeText={setChatInput}
+                                    placeholder="메시지 입력..."
+                                    placeholderTextColor={colors.text.disabled}
+                                    onSubmitEditing={sendMessage}
+                                    returnKeyType="send"
+                                    selectionColor={colors.accent.DEFAULT}
+                                />
+                                <TouchableOpacity
+                                    style={[ms.chatSendBtn, !chatInput.trim() && ms.chatSendBtnInactive]}
                                     onPress={sendMessage}
-                                    isDisabled={!chatInput.trim()}
+                                    disabled={!chatInput.trim()}
+                                    activeOpacity={0.8}
                                 >
-                                    <ButtonText>전송</ButtonText>
-                                </Button>
-                            </HStack>
+                                    <Send size={15} color={chatInput.trim() ? '#FFFFFF' : colors.text.disabled} strokeWidth={2} />
+                                </TouchableOpacity>
+                            </View>
                         </KeyboardAvoidingView>
                     </>
                 ) : (
-                    <Box className="flex-1 justify-center items-center p-5">
-                        <Text size="lg" className="text-typography-400 text-center">
-                            방을 만들어 위치를 공유해보세요!
-                        </Text>
-                    </Box>
+                    <View style={ms.chatEmpty}>
+                        <RNText style={ms.chatEmptyText}>방을 만들어 위치를 공유해보세요</RNText>
+                    </View>
                 )}
             </Animated.View>
         </GestureHandlerRootView>
     );
 }
+
+const ms = StyleSheet.create({
+    destMarker: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+    loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
+    loadingCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 18,
+        paddingVertical: 12,
+        backgroundColor: 'rgba(17,17,19,0.95)',
+        borderRadius: 12,
+        borderCurve: 'continuous',
+        borderWidth: 1,
+        borderColor: '#27272A',
+        gap: 10,
+    },
+    loadingText: { fontSize: 14, color: '#A1A1AA' },
+    destinationHint: { position: 'absolute', top: 120, left: 20, right: 20, alignItems: 'center' },
+    destinationHintCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        backgroundColor: 'rgba(245,158,11,0.95)',
+        borderRadius: 10,
+        borderCurve: 'continuous',
+    },
+    destinationHintText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
+    topBar: { position: 'absolute', top: 50, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    roomCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingLeft: 14,
+        paddingRight: 8,
+        paddingVertical: 10,
+        backgroundColor: 'rgba(17,17,19,0.95)',
+        borderRadius: 12,
+        borderCurve: 'continuous',
+        borderWidth: 1,
+        borderColor: '#27272A',
+        gap: 6,
+    },
+    roomInfo: { marginRight: 6 },
+    roomCode: { fontSize: 13, fontWeight: '600', color: '#FAFAFA' },
+    roomCount: { fontSize: 11, color: '#71717A', marginTop: 1 },
+    topBarBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        borderCurve: 'continuous',
+        backgroundColor: '#18181B',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    etaCard: {
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        backgroundColor: 'rgba(37,99,235,0.92)',
+        borderRadius: 12,
+        borderCurve: 'continuous',
+        borderWidth: 1,
+        borderColor: 'rgba(59,130,246,0.5)',
+    },
+    etaLabel: { fontSize: 11, color: 'rgba(255,255,255,0.7)' },
+    etaDistance: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginTop: 1 },
+    etaTime: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
+    createRoomWrap: { position: 'absolute', bottom: 100, left: 20, right: 20 },
+    createRoomBtn: {
+        backgroundColor: '#3B82F6',
+        paddingVertical: 15,
+        borderRadius: 12,
+        borderCurve: 'continuous',
+        alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    createRoomText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+    fabWrap: { position: 'absolute', bottom: 120, right: 20, alignItems: 'flex-end' },
+    fab: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 44,
+        paddingHorizontal: 16,
+        borderRadius: 22,
+        backgroundColor: '#3B82F6',
+    },
+    fabActive: { backgroundColor: '#D97706' },
+    fabText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
+    fabClear: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 44,
+        paddingHorizontal: 16,
+        borderRadius: 22,
+        backgroundColor: 'rgba(17,17,19,0.95)',
+        borderWidth: 1,
+        borderColor: '#27272A',
+    },
+    fabClearText: { fontSize: 14, fontWeight: '500', color: '#A1A1AA' },
+    chatPanel: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#0D0D0F',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        borderCurve: 'continuous',
+        borderTopWidth: 1,
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
+        borderColor: '#27272A',
+    },
+    dragHandle: { height: 24, justifyContent: 'center', alignItems: 'center' },
+    dragBar: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#3F3F46' },
+    msgBubble: { maxWidth: '80%', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderCurve: 'continuous', marginVertical: 2 },
+    msgBubbleMine: { alignSelf: 'flex-end', backgroundColor: '#2563EB', borderBottomRightRadius: 4 },
+    msgBubbleTheirs: { alignSelf: 'flex-start', backgroundColor: '#18181B', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#27272A' },
+    msgSender: { fontSize: 11, color: '#71717A', marginBottom: 2 },
+    msgTextMine: { fontSize: 14, color: '#FFFFFF', lineHeight: 20 },
+    msgTextTheirs: { fontSize: 14, color: '#F4F4F5', lineHeight: 20 },
+    chatInputBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingBottom: 16,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#27272A',
+        gap: 10,
+    },
+    chatInput: {
+        flex: 1,
+        backgroundColor: '#18181B',
+        borderWidth: 1,
+        borderColor: '#27272A',
+        borderRadius: 20,
+        borderCurve: 'continuous',
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        fontSize: 14,
+        color: '#FAFAFA',
+    },
+    chatSendBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#3B82F6',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    chatSendBtnInactive: { backgroundColor: '#27272A' },
+    chatEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+    chatEmptyText: { fontSize: 14, color: '#52525B', textAlign: 'center' },
+})

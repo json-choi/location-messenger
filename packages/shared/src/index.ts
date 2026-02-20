@@ -163,15 +163,6 @@ export interface UpdateUserInput {
     locationSharingEnabled?: boolean;
 }
 
-export const CHARACTER_EMOJIS: Record<CharacterType, string> = {
-    boy_casual: "🧑",
-    boy_hiphop: "🧢",
-    boy_formal: "🤵",
-    girl_school: "👧",
-    girl_casual: "👩",
-    girl_career: "👩‍💼",
-};
-
 export interface SendMessageInput {
     content: string;
     type: MessageType;

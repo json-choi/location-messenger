@@ -1,51 +1,69 @@
-import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from 'expo-router'
+import { StyleSheet } from 'react-native'
+import { Map, Users, MessageSquare, User } from 'lucide-react-native'
 
 export default function TabsLayout() {
-    return (
-        <Tabs
-            screenOptions={{
-                headerShown: false,
-                tabBarActiveTintColor: '#00A5CF',
-                tabBarInactiveTintColor: '#9E9E9E',
-            }}
-        >
-            <Tabs.Screen
-                name="map"
-                options={{
-                    title: "지도",
-                    tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="map" color={color} size={size} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="friends"
-                options={{
-                    title: "친구",
-                    tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="people" color={color} size={size} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="chats"
-                options={{
-                    title: "채팅",
-                    tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="chatbubbles" color={color} size={size} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="profile"
-                options={{
-                    title: "내정보",
-                    tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="person" color={color} size={size} />
-                    ),
-                }}
-            />
-        </Tabs>
-    );
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: '#3B82F6',
+        tabBarInactiveTintColor: '#52525B',
+        tabBarStyle: styles.tabBar,
+        tabBarLabelStyle: styles.tabBarLabel,
+      }}
+    >
+      <Tabs.Screen
+        name="map"
+        options={{
+          title: '지도',
+          tabBarIcon: ({ color, size }) => (
+            <Map size={size - 2} color={color} strokeWidth={1.75} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="friends"
+        options={{
+          title: '친구',
+          tabBarIcon: ({ color, size }) => (
+            <Users size={size - 2} color={color} strokeWidth={1.75} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chats"
+        options={{
+          title: '채팅',
+          tabBarIcon: ({ color, size }) => (
+            <MessageSquare size={size - 2} color={color} strokeWidth={1.75} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: '내정보',
+          tabBarIcon: ({ color, size }) => (
+            <User size={size - 2} color={color} strokeWidth={1.75} />
+          ),
+        }}
+      />
+    </Tabs>
+  )
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: '#09090B',
+    height: 60,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#27272A',
+    elevation: 0,
+  },
+  tabBarLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+})

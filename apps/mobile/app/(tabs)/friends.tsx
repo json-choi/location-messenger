@@ -1,222 +1,272 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { FlatList, Switch, Alert, Modal } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useUser, useWebSocket } from "../../contexts";
-import { CHARACTER_EMOJIS, CHARACTER_NAMES } from "@location-messenger/shared";
-import { api, ApiFriend } from "../../lib/api";
-import { colors } from "../../constants/design";
-import {
-    Box,
-    VStack,
-    HStack,
-    Text,
-    Heading,
-    Input,
-    InputField,
-    Button,
-    ButtonText,
-    ButtonSpinner,
-    Pressable,
-    Spinner,
-} from "../../components/ui";
+import React, { useState, useEffect, useCallback } from 'react'
+import { FlatList, Switch, Alert, Modal, View, Text as RNText, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator } from 'react-native'
+import { UserPlus, Users, X } from 'lucide-react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useUser, useWebSocket } from '../../contexts'
+import { CHARACTER_NAMES, CharacterType } from '@yogiya/shared'
+import { api, ApiFriend } from '../../lib/api'
+import CharacterSprite from '../../components/CharacterSprite'
+import { colors } from '../../constants/design'
 
 export default function FriendsScreen() {
-    const { user } = useUser();
-    const { onlineStatus, friendLocations, isConnected } = useWebSocket();
-    const insets = useSafeAreaInsets();
-    const [friends, setFriends] = useState<ApiFriend[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [friendCode, setFriendCode] = useState("");
-    const [isAdding, setIsAdding] = useState(false);
+  const { user } = useUser()
+  const { onlineStatus, friendLocations, isConnected } = useWebSocket()
+  const insets = useSafeAreaInsets()
+  const [friends, setFriends] = useState<ApiFriend[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [friendCode, setFriendCode] = useState('')
+  const [isAdding, setIsAdding] = useState(false)
 
-    const loadFriends = useCallback(async () => {
-        if (!user) return;
-        setIsLoading(true);
-        try {
-            const data = await api.getFriends(user.id);
-            setFriends(data);
-        } catch (error) {
-            console.error("Failed to load friends:", error);
-            Alert.alert("오류", "친구 목록을 불러오는데 실패했습니다.");
-        } finally {
-            setIsLoading(false);
-        }
-    }, [user]);
-
-    useEffect(() => {
-        loadFriends();
-    }, [loadFriends]);
-
-    const handleAddFriend = async () => {
-        if (!user || !friendCode.trim()) return;
-        setIsAdding(true);
-        try {
-            await api.addFriend(user.id, friendCode.trim());
-            setShowAddModal(false);
-            setFriendCode("");
-            Alert.alert("성공", "친구 요청을 보냈습니다.");
-        } catch (error) {
-            Alert.alert("오류", "친구 요청에 실패했습니다.");
-        } finally {
-            setIsAdding(false);
-        }
-    };
-
-    const toggleLocationSharing = (friendId: string, enabled: boolean) => {
-        setFriends((prev) =>
-            prev.map((f) =>
-                f.userId === friendId ? { ...f, locationSharingEnabled: enabled } : f,
-            ),
-        );
-    };
-
-    const renderFriend = ({ item }: { item: ApiFriend }) => {
-        const emoji = CHARACTER_EMOJIS[item.characterType as keyof typeof CHARACTER_EMOJIS] || "🐱";
-        const characterName =
-            CHARACTER_NAMES[item.characterType as keyof typeof CHARACTER_NAMES] || "캐릭터";
-        const isOnline = onlineStatus[item.userId] || !!friendLocations[item.userId];
-
-        return (
-            <HStack className="items-center py-4 px-5 bg-background-0 border-b border-outline-100">
-                <Box className="relative mr-4">
-                    <Box
-                        className="w-12 h-12 rounded-full border-[3px] justify-center items-center bg-background-0"
-                        style={{ borderColor: item.characterColor }}
-                    >
-                        <Text className="text-2xl">{emoji}</Text>
-                    </Box>
-                    <Box
-                        className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-background-0 ${
-                            isOnline ? "bg-success-500" : "bg-outline-400"
-                        }`}
-                    />
-                </Box>
-                <VStack className="flex-1">
-                    <Text size="lg" bold className="mb-0.5">
-                        {item.name || "익명"}
-                    </Text>
-                    <Text size="sm" className="text-typography-600">
-                        {characterName}
-                    </Text>
-                </VStack>
-                <HStack className="items-center">
-                    <Switch
-                        value={item.locationSharingEnabled}
-                        onValueChange={(value: boolean) =>
-                            toggleLocationSharing(item.userId, value)
-                        }
-                        trackColor={{ false: colors.gray[300], true: colors.secondary.DEFAULT }}
-                        thumbColor={item.locationSharingEnabled ? colors.white : colors.gray[100]}
-                    />
-                </HStack>
-            </HStack>
-        );
-    };
-
-    if (isLoading) {
-        return (
-            <Box className="flex-1 justify-center items-center bg-background-0">
-                <Spinner size="large" />
-            </Box>
-        );
+  const loadFriends = useCallback(async () => {
+    if (!user) return
+    setIsLoading(true)
+    try {
+      const data = await api.getFriends(user.id)
+      setFriends(data)
+    } catch (error) {
+      console.error('Failed to load friends:', error)
+      Alert.alert('오류', '친구 목록을 불러오는데 실패했습니다.')
+    } finally {
+      setIsLoading(false)
     }
+  }, [user])
+
+  useEffect(() => {
+    loadFriends()
+  }, [loadFriends])
+
+  const handleAddFriend = async () => {
+    if (!user || !friendCode.trim()) return
+    setIsAdding(true)
+    try {
+      await api.addFriend(user.id, friendCode.trim())
+      setShowAddModal(false)
+      setFriendCode('')
+      Alert.alert('성공', '친구 요청을 보냈습니다.')
+    } catch (error) {
+      Alert.alert('오류', '친구 요청에 실패했습니다.')
+    } finally {
+      setIsAdding(false)
+    }
+  }
+
+  const toggleLocationSharing = (friendId: string, enabled: boolean) => {
+    setFriends((prev) => prev.map((f) => f.userId === friendId ? { ...f, locationSharingEnabled: enabled } : f))
+  }
+
+  const renderFriend = ({ item, index }: { item: ApiFriend; index: number }) => {
+    const characterName = CHARACTER_NAMES[item.characterType as keyof typeof CHARACTER_NAMES] || '캐릭터'
+    const isOnline = onlineStatus[item.userId] || !!friendLocations[item.userId]
+    const isLast = index === friends.length - 1
 
     return (
-        <Box className="flex-1 bg-background-0">
-            <HStack
-                className="justify-between items-center px-5 pb-4 bg-background-0 border-b border-outline-100"
-                style={{ paddingTop: insets.top + 8 }}
-            >
-                <Heading size="2xl">친구</Heading>
-                <Pressable className="p-2" onPress={() => setShowAddModal(true)}>
-                    <Ionicons name="person-add" size={24} color={colors.primary.DEFAULT} />
-                </Pressable>
-            </HStack>
+      <View style={[s.friendItem, !isLast && s.friendItemBorder]}>
+        <View style={s.avatarWrap}>
+          <View style={[s.avatar, { borderColor: item.characterColor }]}>
+            <CharacterSprite type={item.characterType as CharacterType} size={38} />
+          </View>
+          <View style={[s.onlineDot, { backgroundColor: isOnline ? colors.success : colors.border.default }]} />
+        </View>
+        <View style={s.friendInfo}>
+          <RNText style={s.friendName}>{item.name || '익명'}</RNText>
+          <RNText style={s.friendSub}>{characterName}</RNText>
+        </View>
+        <Switch
+          value={item.locationSharingEnabled}
+          onValueChange={(v) => toggleLocationSharing(item.userId, v)}
+          trackColor={{ false: colors.border.default, true: colors.accent.DEFAULT }}
+          thumbColor={colors.white}
+        />
+      </View>
+    )
+  }
 
-            <HStack className="items-center px-5 py-2 bg-background-50">
-                <Box
-                    className={`w-2 h-2 rounded-full mr-2 ${
-                        isConnected ? "bg-success-500" : "bg-warning-500"
-                    }`}
-                />
-                <Text size="sm" className="text-typography-600">
-                    {isConnected ? "연결됨" : "연결 중..."}
-                </Text>
-            </HStack>
+  if (isLoading) {
+    return (
+      <View style={[s.screen, s.centered]}>
+        <ActivityIndicator color={colors.accent.DEFAULT} />
+      </View>
+    )
+  }
 
-            {friends.length === 0 ? (
-                <VStack className="flex-1 justify-center items-center px-8">
-                    <Ionicons name="people-outline" size={64} color={colors.gray[400]} />
-                    <Text size="lg" className="text-typography-500 mt-6 mb-8">
-                        아직 친구가 없습니다
-                    </Text>
-                    <Button size="lg" onPress={() => setShowAddModal(true)}>
-                        <ButtonText>친구 추가하기</ButtonText>
-                    </Button>
-                </VStack>
-            ) : (
-                <FlatList
-                    data={friends}
-                    renderItem={renderFriend}
-                    keyExtractor={(item) => item.id}
-                    contentContainerClassName="py-2"
-                    showsVerticalScrollIndicator={false}
-                    onRefresh={loadFriends}
-                    refreshing={isLoading}
-                />
-            )}
+  return (
+    <View style={s.screen}>
+      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+        <View style={s.headerLeft}>
+          <RNText style={s.headerTitle}>친구</RNText>
+          <View style={[s.connDot, { backgroundColor: isConnected ? colors.success : colors.warning }]} />
+        </View>
+        <TouchableOpacity style={s.headerBtn} onPress={() => setShowAddModal(true)} activeOpacity={0.7}>
+          <UserPlus size={20} color={colors.text.secondary} strokeWidth={1.75} />
+        </TouchableOpacity>
+      </View>
 
-            <Modal
-                visible={showAddModal}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowAddModal(false)}
-            >
-                <Box className="flex-1 bg-background-950/50 justify-center items-center">
-                    <VStack
-                        className="bg-background-0 rounded-2xl p-6 w-[85%] max-w-[320px]"
-                        space="md"
-                    >
-                        <Heading size="xl" className="text-center">
-                            친구 추가
-                        </Heading>
-                        <Text size="md" className="text-typography-600 text-center mb-2">
-                            친구의 사용자 ID를 입력하세요
-                        </Text>
+      {friends.length === 0 ? (
+        <View style={[s.centered, { flex: 1 }]}>
+          <Users size={44} color={colors.text.disabled} strokeWidth={1.25} />
+          <RNText style={s.emptyTitle}>아직 친구가 없습니다</RNText>
+          <RNText style={s.emptyBody}>친구 코드로 친구를 추가해보세요</RNText>
+          <TouchableOpacity style={s.addBtn} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
+            <RNText style={s.addBtnText}>친구 추가하기</RNText>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={friends}
+          renderItem={renderFriend}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          onRefresh={loadFriends}
+          refreshing={isLoading}
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={{ paddingTop: 8 }}
+        />
+      )}
 
-                        <Input size="lg" variant="outline" className="mb-2">
-                            <InputField
-                                value={friendCode}
-                                onChangeText={setFriendCode}
-                                placeholder="사용자 ID"
-                                autoFocus
-                            />
-                        </Input>
-
-                        <HStack space="md">
-                            <Button
-                                variant="outline"
-                                className="flex-1"
-                                onPress={() => {
-                                    setShowAddModal(false);
-                                    setFriendCode("");
-                                }}
-                            >
-                                <ButtonText>취소</ButtonText>
-                            </Button>
-                            <Button
-                                className="flex-1"
-                                onPress={handleAddFriend}
-                                isDisabled={isAdding || !friendCode.trim()}
-                            >
-                                {isAdding ? <ButtonSpinner /> : <ButtonText>추가</ButtonText>}
-                            </Button>
-                        </HStack>
-                    </VStack>
-                </Box>
-            </Modal>
-        </Box>
-    );
+      <Modal visible={showAddModal} transparent animationType="fade" onRequestClose={() => setShowAddModal(false)}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <View style={s.modalHeader}>
+              <RNText style={s.modalTitle}>친구 추가</RNText>
+              <TouchableOpacity onPress={() => { setShowAddModal(false); setFriendCode('') }} activeOpacity={0.7}>
+                <X size={20} color={colors.text.secondary} strokeWidth={1.75} />
+              </TouchableOpacity>
+            </View>
+            <RNText style={s.modalSub}>친구의 사용자 ID를 입력하세요</RNText>
+            <TextInput
+              style={s.modalInput}
+              value={friendCode}
+              onChangeText={setFriendCode}
+              placeholder="사용자 ID"
+              placeholderTextColor={colors.text.disabled}
+              autoFocus
+              selectionColor={colors.accent.DEFAULT}
+            />
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={s.modalCancel}
+                onPress={() => { setShowAddModal(false); setFriendCode('') }}
+                activeOpacity={0.7}
+              >
+                <RNText style={s.modalCancelText}>취소</RNText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalConfirm, (!friendCode.trim() || isAdding) && s.modalConfirmDisabled]}
+                onPress={handleAddFriend}
+                disabled={!friendCode.trim() || isAdding}
+                activeOpacity={0.8}
+              >
+                {isAdding ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <RNText style={s.modalConfirmText}>추가</RNText>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  )
 }
+
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#09090B' },
+  centered: { justifyContent: 'center', alignItems: 'center' },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#27272A',
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerTitle: { fontSize: 22, fontWeight: '700', color: '#FAFAFA', letterSpacing: -0.4 },
+  connDot: { width: 7, height: 7, borderRadius: 4 },
+  headerBtn: { padding: 4 },
+  friendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  friendItemBorder: { borderBottomWidth: 1, borderBottomColor: '#18181B' },
+  avatarWrap: { position: 'relative', marginRight: 14 },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    backgroundColor: '#111113',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#09090B',
+  },
+  friendInfo: { flex: 1 },
+  friendName: { fontSize: 15, fontWeight: '600', color: '#FAFAFA', marginBottom: 2 },
+  friendSub: { fontSize: 13, color: '#71717A' },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#A1A1AA', marginTop: 16, marginBottom: 4 },
+  emptyBody: { fontSize: 14, color: '#52525B', marginBottom: 24 },
+  addBtn: { backgroundColor: '#3B82F6', paddingHorizontal: 24, paddingVertical: 11, borderRadius: 8, borderCurve: 'continuous' },
+  addBtnText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
+  modalCard: {
+    width: '85%',
+    maxWidth: 320,
+    backgroundColor: '#111113',
+    borderRadius: 16,
+    borderCurve: 'continuous',
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#27272A',
+  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: '#FAFAFA' },
+  modalSub: { fontSize: 13, color: '#71717A', marginBottom: 16 },
+  modalInput: {
+    backgroundColor: '#18181B',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    borderRadius: 8,
+    borderCurve: 'continuous',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 15,
+    color: '#FAFAFA',
+    marginBottom: 16,
+  },
+  modalActions: { flexDirection: 'row', gap: 10 },
+  modalCancel: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 8,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: '#27272A',
+    alignItems: 'center',
+  },
+  modalCancelText: { fontSize: 15, fontWeight: '500', color: '#A1A1AA' },
+  modalConfirm: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 8,
+    borderCurve: 'continuous',
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+  },
+  modalConfirmDisabled: { opacity: 0.4 },
+  modalConfirmText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+})

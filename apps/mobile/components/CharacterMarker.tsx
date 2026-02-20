@@ -1,4 +1,4 @@
-import { CharacterType, CharacterDirection } from "@location-messenger/shared";
+import { CharacterType, CharacterDirection } from "@yogiya/shared";
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Animated, {

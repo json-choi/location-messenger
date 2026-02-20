@@ -1,4 +1,4 @@
-# Location Messenger 🗺️
+# Yogiya 🗺️
 
 위치 기반 캐릭터 메신저 앱
 
@@ -49,7 +49,7 @@ bun run dev:mobile
 ## 프로젝트 구조
 
 ```
-location-messenger/
+yogiya/
 ├── apps/
 │   └── mobile/              — Expo 앱
 ├── packages/

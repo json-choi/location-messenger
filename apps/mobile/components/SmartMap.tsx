@@ -1,11 +1,12 @@
 import React, { useMemo } from "react";
-import { View, Platform } from "react-native";
+import { View } from "react-native";
 import Constants from "expo-constants";
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import { NaverMapView, NaverMapMarkerOverlay } from "@mj-studio/react-native-naver-map";
-import { MapMarker } from "@location-messenger/shared";
+import { MapMarker } from "@yogiya/shared";
 import CharacterMarker from "./CharacterMarker";
 import { Box } from "./ui";
+import { naverMapStyle } from "../constants/mapStyle";
 
 interface SmartMapProps {
     region?: Region;
@@ -45,7 +46,7 @@ export default function SmartMap({
 
     const currentRegion = region || defaultRegion;
 
-    if (Platform.OS === "web") {
+    if (process.env.EXPO_OS === "web") {
         return (
             <Box className="flex-1" style={style}>
                 <Box className="flex-1 bg-background-100" />
@@ -91,7 +92,8 @@ export default function SmartMap({
         <Box className="flex-1" style={style}>
             <MapView
                 style={{ flex: 1 }}
-                provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+                provider={process.env.EXPO_OS === "android" ? PROVIDER_GOOGLE : undefined}
+                customMapStyle={naverMapStyle}
                 initialRegion={currentRegion}
                 showsUserLocation={showsUserLocation}
                 onRegionChangeComplete={onRegionChange}

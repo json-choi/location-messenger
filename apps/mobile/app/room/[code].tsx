@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform } from "react-native";
+import { KeyboardAvoidingView } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useUser } from "../../contexts";
 import { useWebSocket } from "../../contexts/WebSocketContext";
@@ -138,12 +138,12 @@ export default function RoomScreen() {
         return (
             <KeyboardAvoidingView
                 className="flex-1 bg-background-0"
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                behavior={process.env.EXPO_OS === "ios" ? "padding" : undefined}
             >
                 <VStack className="flex-1 justify-center items-center p-6" space="xl">
                     <VStack space="sm" className="items-center mb-4">
                         <Heading size="3xl" className="text-center">
-                            방에 초대되었어요! 🎉
+                            방에 초대되었어요!
                         </Heading>
                         <Text size="lg" className="text-typography-600 text-center">
                             이름을 입력하고 참여하세요

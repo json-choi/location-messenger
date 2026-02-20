@@ -1,9 +1,9 @@
 {
     "expo": {
-        "name": "Location Messenger",
-        "slug": "location-messenger",
+        "name": "Yogiya",
+        "slug": "yogiya",
         "version": "1.0.0",
-        "scheme": "locationmessenger",
+        "scheme": "yogiya",
         "orientation": "portrait",
         "userInterfaceStyle": "automatic",
         "icon": "./assets/icon.png",
@@ -12,18 +12,20 @@
         },
         "ios": {
             "supportsTablet": true,
-            "bundleIdentifier": "com.locationmessenger.app",
+            "bundleIdentifier": "com.yogiya.app",
             "infoPlist": {
-                "NSLocationWhenInUseUsageDescription": "친구들에게 내 위치를 공유하기 위해 필요합니다.",
-                "NSLocationAlwaysAndWhenInUseUsageDescription": "백그라운드에서도 위치를 공유하기 위해 필요합니다."
+                "NSLocationWhenInUseUsageDescription": "방 멤버들과 위치를 공유하기 위해 필요합니다.",
+                "NSLocationAlwaysAndWhenInUseUsageDescription": "앱이 백그라운드에 있을 때도 방 멤버들에게 위치를 공유하기 위해 항상 허용이 필요합니다."
             }
         },
         "android": {
-            "package": "com.locationmessenger.app",
+            "package": "com.yogiya.app",
             "permissions": [
                 "ACCESS_COARSE_LOCATION",
                 "ACCESS_FINE_LOCATION",
-                "ACCESS_BACKGROUND_LOCATION"
+                "ACCESS_BACKGROUND_LOCATION",
+                "FOREGROUND_SERVICE",
+                "FOREGROUND_SERVICE_LOCATION"
             ],
             "config": {
                 "googleMaps": {
@@ -35,8 +37,11 @@
             [
                 "expo-location",
                 {
-                    "locationAlwaysAndWhenInUsePermission": "위치 공유를 위해 위치 접근 권한이 필요합니다.",
-                    "locationWhenInUsePermission": "앱 사용 중 위치 공유를 위해 위치 접근 권한이 필요합니다."
+                    "locationAlwaysAndWhenInUsePermission": "방 멤버들에게 위치를 공유하기 위해 위치 접근 권한이 필요합니다.",
+                    "locationWhenInUsePermission": "앱 사용 중 방 멤버들과 위치를 공유하기 위해 위치 접근 권한이 필요합니다.",
+                    "isIosBackgroundLocationEnabled": true,
+                    "isAndroidBackgroundLocationEnabled": true,
+                    "isAndroidForegroundServiceEnabled": true
                 }
             ]
         ]

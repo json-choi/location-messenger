@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
-import { WSMessage, UserLocation, RoomInfo } from "@location-messenger/shared";
+import React, { createContext, useState, useEffect, useRef, useCallback } from "react";
+import { WSMessage, UserLocation, RoomInfo } from "@yogiya/shared";
+import { calcDirection } from "../lib/direction";
 
 const WS_URL = process.env.EXPO_PUBLIC_WS_URL || "wss://localhost:3000/ws";
 
@@ -70,13 +71,8 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                         const distance = Math.sqrt(dx * dx + dy * dy);
 
                         if (distance > 0.00001) {
-                            // threshold for movement
                             isMoving = true;
-                            if (Math.abs(dx) > Math.abs(dy)) {
-                                direction = dx > 0 ? "east" : "west";
-                            } else {
-                                direction = dy > 0 ? "north" : "south";
-                            }
+                            direction = calcDirection(dx, dy);
                         }
                     }
 
@@ -300,7 +296,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useWebSocket() {
-    const context = useContext(WebSocketContext);
+    const context = React.use(WebSocketContext);
     if (!context) {
         throw new Error("useWebSocket must be used within a WebSocketProvider");
     }

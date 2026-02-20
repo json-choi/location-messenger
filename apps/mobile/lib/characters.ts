@@ -1,4 +1,4 @@
-import { CharacterType, CharacterDirection } from '@location-messenger/shared'
+import { CharacterType, CharacterDirection } from '@yogiya/shared'
 
 export type AnimationName = 'idle' | 'walking'
 

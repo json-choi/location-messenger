@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
 import { zValidator } from '@hono/zod-validator'
-import { db, users, locations, friendships, rooms, roomMembers, roomMessages, messages } from '@location-messenger/db'
+import { db, users, locations, friendships, rooms, roomMembers, roomMessages, messages } from '@yogiya/db'
 import { eq, and, or, desc, lt, isNull } from 'drizzle-orm'
 
 const app = new Hono().basePath('/api')

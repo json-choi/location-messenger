@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { User, CharacterType, RoomInfo, CHARACTER_TYPES } from '@location-messenger/shared'
+import 'expo-sqlite/localStorage/install'
+import React, { createContext, useState, useEffect, useCallback } from 'react'
+import { User, CharacterType, RoomInfo, CHARACTER_TYPES } from '@yogiya/shared'
 
 const USER_STORAGE_KEY = '@user_data'
 const ROOM_STORAGE_KEY = '@current_room'
@@ -35,12 +35,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const loadUser = async () => {
     try {
-      const userData = await AsyncStorage.getItem(USER_STORAGE_KEY)
+      const userData = localStorage.getItem(USER_STORAGE_KEY)
       if (userData) {
         const parsed = JSON.parse(userData)
         if (!CHARACTER_TYPES.includes(parsed.characterType)) {
           parsed.characterType = 'boy_casual' as CharacterType
-          await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(parsed))
+          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(parsed))
         }
         setUser(parsed)
       }
@@ -53,7 +53,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const loadCurrentRoom = async () => {
     try {
-      const roomData = await AsyncStorage.getItem(ROOM_STORAGE_KEY)
+      const roomData = localStorage.getItem(ROOM_STORAGE_KEY)
       if (roomData) {
         setCurrentRoomState(JSON.parse(roomData))
       }
@@ -91,12 +91,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       createdAt: data.user.createdAt,
     }
 
-    await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser))
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser))
     setUser(newUser)
   }
 
   const logout = async () => {
-    await AsyncStorage.multiRemove([USER_STORAGE_KEY, ROOM_STORAGE_KEY])
+    localStorage.removeItem(USER_STORAGE_KEY)
+    localStorage.removeItem(ROOM_STORAGE_KEY)
     setUser(null)
     setCurrentRoomState(null)
   }
@@ -105,7 +106,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!user) return
 
     const updatedUser = { ...user, characterType: type, characterColor: color }
-    await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
     setUser(updatedUser)
   }
 
@@ -113,7 +114,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!user) return
 
     const updatedUser = { ...user, locationSharingEnabled: enabled }
-    await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
     setUser(updatedUser)
   }
 
@@ -121,16 +122,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (!user) return
 
     const updatedUser = { ...user, name }
-    await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
     setUser(updatedUser)
   }
 
   const setCurrentRoom = useCallback((room: RoomInfo | null) => {
     setCurrentRoomState(room)
     if (room) {
-      AsyncStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify(room))
+      localStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify(room))
     } else {
-      AsyncStorage.removeItem(ROOM_STORAGE_KEY)
+      localStorage.removeItem(ROOM_STORAGE_KEY)
     }
   }, [])
 
@@ -141,7 +142,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const response = await fetch(`${API_URL}/api/users/${user.id}`)
       if (!response.ok) {
         // 사용자가 DB에 없음 - 로컬 데이터 삭제
-        await AsyncStorage.multiRemove([USER_STORAGE_KEY, ROOM_STORAGE_KEY])
+        localStorage.removeItem(USER_STORAGE_KEY)
+        localStorage.removeItem(ROOM_STORAGE_KEY)
         setUser(null)
         setCurrentRoomState(null)
         return false
@@ -175,7 +177,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useUser() {
-  const context = useContext(UserContext)
+  const context = React.use(UserContext)
   if (!context) {
     throw new Error('useUser must be used within a UserProvider')
   }
