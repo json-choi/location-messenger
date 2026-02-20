@@ -43,6 +43,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null)
   const currentUserIdRef = useRef<string>('')
   const currentRoomCodeRef = useRef<string>('')
+  const pendingRoomJoinRef = useRef<{ userId: string; roomCode: string } | null>(null)
 
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
@@ -130,7 +131,8 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const connect = useCallback((userId: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
+    const state = wsRef.current?.readyState
+    if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return
 
     currentUserIdRef.current = userId
     setIsConnecting(true)
@@ -142,6 +144,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       setIsConnected(true)
       setIsConnecting(false)
       ws.send(JSON.stringify({ type: 'join', userId }))
+      if (pendingRoomJoinRef.current) {
+        const { userId: pendingUserId, roomCode } = pendingRoomJoinRef.current
+        pendingRoomJoinRef.current = null
+        ws.send(JSON.stringify({ type: 'join_room', userId: pendingUserId, roomCode }))
+      }
     }
 
     ws.onmessage = (event) => {
@@ -176,11 +183,14 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     currentRoomCodeRef.current = roomCode
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'join_room', userId, roomCode }))
+    } else {
+      pendingRoomJoinRef.current = { userId, roomCode }
     }
   }, [])
 
   const leaveRoom = useCallback((userId: string, roomCode: string) => {
     currentRoomCodeRef.current = ''
+    pendingRoomJoinRef.current = null
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'leave_room', userId, roomCode }))
     }

@@ -1,210 +1,169 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { useLocalSearchParams, router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useUser, useWebSocket } from "../../contexts";
+import { CHARACTER_EMOJIS } from "@location-messenger/shared";
+import ChatBubble from "../../components/ChatBubble";
+import { api } from "../../lib/api";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native'
-import { useLocalSearchParams, router } from 'expo-router'
-import { Ionicons } from '@expo/vector-icons'
-import { useUser, useWebSocket } from '../../contexts'
-import { CHARACTER_EMOJIS } from '@location-messenger/shared'
-import ChatBubble from '../../components/ChatBubble'
+    Box,
+    VStack,
+    HStack,
+    Text,
+    Input,
+    InputField,
+    Pressable,
+    Spinner,
+} from "../../components/ui";
+import { colors } from "../../constants/design";
 
 export default function ChatScreen() {
-  const { id: friendId } = useLocalSearchParams<{ id: string }>()
-  const { user } = useUser()
-  const { messages: wsMessages, sendChat, connect, isConnected } = useWebSocket()
-  const [inputText, setInputText] = useState('')
-  const scrollViewRef = useRef<ScrollView>(null)
+    const { id: friendId } = useLocalSearchParams<{ id: string }>();
+    const { user } = useUser();
+    const { sendChat, connect, isConnected } = useWebSocket();
+    const [inputText, setInputText] = useState("");
+    const [chatMessages, setChatMessages] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const scrollViewRef = useRef<ScrollView>(null);
 
-  // Connect WebSocket when user is available
-  useEffect(() => {
-    if (user?.id && !isConnected) {
-      connect(user.id)
+    const loadMessages = useCallback(async () => {
+        if (!user || !friendId) return;
+        try {
+            const data = await api.getDirectMessages(user.id, friendId);
+            setChatMessages(data.messages || []);
+        } catch (error) {
+            console.error("Failed to load messages:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [user, friendId]);
+
+    useEffect(() => {
+        loadMessages();
+    }, [loadMessages]);
+
+    // Connect WebSocket when user is available
+    useEffect(() => {
+        if (user?.id && !isConnected) {
+            connect(user.id);
+        }
+    }, [user?.id, isConnected, connect]);
+
+    const handleSend = async () => {
+        if (!inputText.trim() || !friendId || !user) return;
+
+        const content = inputText.trim();
+        setInputText("");
+
+        // Optimistic update
+        const newMessage = {
+            id: `temp-${Date.now()}`,
+            content,
+            type: "TEXT",
+            senderId: user.id,
+            receiverId: friendId,
+            createdAt: new Date().toISOString(),
+            isMine: true,
+        };
+        setChatMessages((prev) => [...prev, newMessage]);
+
+        setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+
+        try {
+            await api.sendDirectMessage(friendId, user.id, content);
+            sendChat(friendId, content);
+        } catch (error) {
+            console.error("Failed to send message:", error);
+        }
+    };
+
+    if (!user || isLoading) {
+        return (
+            <Box className="flex-1 justify-center items-center bg-background-0">
+                <Spinner size="large" color={colors.secondary.DEFAULT} />
+                <Text size="md" className="mt-4 text-typography-600">
+                    로딩 중...
+                </Text>
+            </Box>
+        );
     }
-  }, [user?.id, isConnected, connect])
 
-  // Filter messages for this chat
-  const chatMessages = wsMessages.filter(
-    (m) => m.from === friendId || m.to === friendId
-  )
-
-  const handleSend = () => {
-    if (!inputText.trim() || !friendId || !user) return
-
-    sendChat(friendId, inputText.trim())
-    setInputText('')
-    
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true })
-    }, 100)
-  }
-
-  if (!user) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>로딩 중...</Text>
-      </View>
-    )
-  }
-
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
-    >
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarEmoji}>{CHARACTER_EMOJIS[user.characterType]}</Text>
-        </View>
-        <Text style={styles.headerTitle}>채팅</Text>
-      </View>
-
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
-      >
-        {chatMessages.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubble-outline" size={48} color="#ccc" />
-            <Text style={styles.emptyText}>메시지를 보내보세요!</Text>
-          </View>
-        ) : (
-          chatMessages.map((message) => (
-            <ChatBubble
-              key={message.id}
-              message={{
-                id: message.id,
-                content: message.content,
-                type: 'TEXT',
-                senderId: message.from,
-                receiverId: message.to || '',
-                createdAt: new Date(message.timestamp).toISOString(),
-              }}
-              isOwn={message.isMine}
-            />
-          ))
-        )}
-      </ScrollView>
-
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.textInput}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="메시지 입력..."
-          multiline
-          maxLength={1000}
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, inputText.trim() ? styles.sendButtonActive : styles.sendButtonInactive]}
-          onPress={handleSend}
-          disabled={!inputText.trim()}
+        <KeyboardAvoidingView
+            className="flex-1 bg-background-50"
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={90}
         >
-          <Ionicons name="send" size={20} color={inputText.trim() ? '#fff' : '#999'} />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
-  )
+            <HStack className="items-center px-5 py-3 bg-background-0 border-b border-outline-100">
+                <Pressable onPress={() => router.back()} className="mr-4 p-1">
+                    <Ionicons name="arrow-back" size={24} color={colors.secondary.DEFAULT} />
+                </Pressable>
+                <Box className="w-10 h-10 rounded-full bg-background-100 justify-center items-center mr-3">
+                    <Text className="text-xl">{CHARACTER_EMOJIS[user.characterType]}</Text>
+                </Box>
+                <Text size="xl" bold>
+                    채팅
+                </Text>
+            </HStack>
+
+            <ScrollView
+                ref={scrollViewRef}
+                className="flex-1"
+                contentContainerClassName="p-4"
+                onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+            >
+                {chatMessages.length === 0 ? (
+                    <VStack className="flex-1 justify-center items-center pt-20">
+                        <Ionicons name="chatbubble-outline" size={48} color={colors.gray[300]} />
+                        <Text size="lg" className="mt-4 text-typography-500">
+                            메시지를 보내보세요!
+                        </Text>
+                    </VStack>
+                ) : (
+                    chatMessages.map((message) => (
+                        <ChatBubble
+                            key={message.id}
+                            content={message.content}
+                            isMine={message.senderId === user.id || message.isMine}
+                            timestamp={new Date(message.createdAt).getTime()}
+                        />
+                    ))
+                )}
+            </ScrollView>
+
+            <HStack className="items-end px-4 py-3 bg-background-0 border-t border-outline-100">
+                <Input
+                    variant="outline"
+                    size="md"
+                    className="flex-1 min-h-[40px] max-h-[100px] bg-background-50 rounded-2xl mr-3"
+                >
+                    <InputField
+                        value={inputText}
+                        onChangeText={setInputText}
+                        placeholder="메시지 입력..."
+                        multiline
+                        maxLength={1000}
+                        className="py-2.5"
+                    />
+                </Input>
+                <Pressable
+                    className={`w-10 h-10 rounded-full justify-center items-center mb-0.5 ${
+                        inputText.trim() ? "bg-secondary-500" : "bg-outline-200"
+                    }`}
+                    onPress={handleSend}
+                    disabled={!inputText.trim()}
+                >
+                    <Ionicons
+                        name="send"
+                        size={20}
+                        color={inputText.trim() ? "#fff" : colors.gray[400]}
+                    />
+                </Pressable>
+            </HStack>
+        </KeyboardAvoidingView>
+    );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  backButton: {
-    marginRight: 12,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarEmoji: {
-    fontSize: 20,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  messagesContainer: {
-    flex: 1,
-  },
-  messagesContent: {
-    padding: 16,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#999',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#FFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-  },
-  textInput: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 100,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#F0F0F0',
-    borderRadius: 20,
-    fontSize: 16,
-    marginRight: 8,
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonActive: {
-    backgroundColor: '#007AFF',
-  },
-  sendButtonInactive: {
-    backgroundColor: '#e0e0e0',
-  },
-})

@@ -25,12 +25,17 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useUser()
 
   const requestPermission = useCallback(async () => {
-    const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync()
-    if (foregroundStatus !== 'granted') {
+    try {
+      const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync()
+      if (foregroundStatus !== 'granted') {
+        return false
+      }
+      const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync()
+      return backgroundStatus === 'granted'
+    } catch (e) {
+      console.error('Location permission request failed:', e)
       return false
     }
-    const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync()
-    return backgroundStatus === 'granted'
   }, [])
 
   const startTracking = useCallback(async () => {
@@ -61,32 +66,36 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     let subscription: Location.LocationSubscription | null = null
 
     const initLocation = async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') return
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status !== 'granted') return
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      })
-      setCurrentLocation(location)
-
-      subscription = await Location.watchPositionAsync(
-        {
+        const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
-          timeInterval: 5000,
-          distanceInterval: 10,
-        },
-        (newLocation) => {
-          setCurrentLocation(newLocation)
-          if (user?.locationSharingEnabled) {
-            sendLocation(
-              newLocation.coords.latitude,
-              newLocation.coords.longitude,
-              newLocation.coords.accuracy ?? undefined,
-              newLocation.coords.speed ?? undefined
-            )
+        })
+        setCurrentLocation(location)
+
+        subscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000,
+            distanceInterval: 10,
+          },
+          (newLocation) => {
+            setCurrentLocation(newLocation)
+            if (user?.locationSharingEnabled) {
+              sendLocation(
+                newLocation.coords.latitude,
+                newLocation.coords.longitude,
+                newLocation.coords.accuracy ?? undefined,
+                newLocation.coords.speed ?? undefined
+              )
+            }
           }
-        }
-      )
+        )
+      } catch (e) {
+        console.error('Location initialization failed:', e)
+      }
     }
 
     initLocation()

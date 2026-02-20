@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
-import { prisma } from '@location-messenger/db'
+import { db, rooms as roomsTable, roomMembers, roomMessages, users } from '@location-messenger/db'
+import { eq, and, isNull } from 'drizzle-orm'
 
 // 클라이언트 정보 타입
 interface ClientInfo {
@@ -112,21 +113,17 @@ async function handleJoinRoom(ws: any, msg: { type: 'join_room'; userId: string;
   }
   rooms.get(msg.roomCode)!.add(ws.id)
   
-  // DB에서 룸 정보와 멤버 조회
-  const room = await prisma.rooms.findUnique({
-    where: { code: msg.roomCode },
-    include: {
+  const room = await db.query.rooms.findFirst({
+    where: eq(roomsTable.code, msg.roomCode),
+    with: {
       members: {
-        where: { leftAt: null },
-        include: {
-          user: true
-        }
-      }
-    }
+        where: isNull(roomMembers.leftAt),
+        with: { user: true },
+      },
+    },
   })
   
   if (room) {
-    // 새 유저에게 룸 정보 전송
     ws.send({
       type: 'room_info',
       room: {
@@ -135,15 +132,14 @@ async function handleJoinRoom(ws: any, msg: { type: 'join_room'; userId: string;
         destinationLat: room.destinationLat,
         destinationLng: room.destinationLng,
         destinationName: room.destinationName,
-        members: room.members.map(m => ({
+        members: room.members.map((m) => ({
           userId: m.userId,
-          user: m.user
-        }))
-      }
+          user: m.user,
+        })),
+      },
     })
     
-    // 룸 멤버들에게 새 유저 알림
-    const user = await prisma.users.findUnique({ where: { id: msg.userId } })
+    const user = await db.query.users.findFirst({ where: eq(users.id, msg.userId) })
     broadcastToRoom(msg.roomCode, {
       type: 'user_joined_room',
       userId: msg.userId,
@@ -204,47 +200,37 @@ function handleLocationUpdate(ws: any, msg: { type: 'location_update'; userId: s
 }
 
 async function handleRoomChat(ws: any, msg: { type: 'room_chat'; roomCode: string; senderId: string; content: string }) {
-  // DB에 메시지 저장
-  const room = await prisma.rooms.findUnique({ where: { code: msg.roomCode } })
+  const room = await db.query.rooms.findFirst({ where: eq(roomsTable.code, msg.roomCode) })
   if (room) {
-    await prisma.room_messages.create({
-      data: {
-        roomId: room.id,
-        senderId: msg.senderId,
-        content: msg.content,
-        type: 'TEXT'
-      }
+    await db.insert(roomMessages).values({
+      roomId: room.id,
+      senderId: msg.senderId,
+      content: msg.content,
+      type: 'TEXT',
     })
   }
-  
-  // 룸 멤버들에게 브로드캐스트
+
   broadcastToRoom(msg.roomCode, {
     type: 'room_chat',
     roomCode: msg.roomCode,
     senderId: msg.senderId,
     content: msg.content,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   })
 }
 
 async function handleSetDestination(ws: any, msg: { type: 'set_destination'; roomCode: string; lat: number; lng: number; name?: string }) {
-  // DB 업데이트
-  await prisma.rooms.update({
-    where: { code: msg.roomCode },
-    data: {
-      destinationLat: msg.lat,
-      destinationLng: msg.lng,
-      destinationName: msg.name
-    }
-  })
-  
-  // 룸 멤버들에게 알림
+  await db
+    .update(roomsTable)
+    .set({ destinationLat: msg.lat, destinationLng: msg.lng, destinationName: msg.name })
+    .where(eq(roomsTable.code, msg.roomCode))
+
   broadcastToRoom(msg.roomCode, {
     type: 'destination_updated',
     roomCode: msg.roomCode,
     lat: msg.lat,
     lng: msg.lng,
-    name: msg.name
+    name: msg.name,
   })
 }
 

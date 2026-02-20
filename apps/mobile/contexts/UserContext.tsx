@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { randomUUID } from 'expo-crypto'
 import { User, CharacterType, RoomInfo } from '@location-messenger/shared'
 
 const USER_STORAGE_KEY = '@user_data'
@@ -19,6 +18,7 @@ interface UserContextType {
   toggleLocationSharing: (enabled: boolean) => Promise<void>
   updateProfile: (name: string) => Promise<void>
   setCurrentRoom: (room: RoomInfo | null) => void
+  verifyUser: () => Promise<boolean>
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
@@ -59,48 +59,36 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }
 
   const onboard = async (name: string, characterType: CharacterType, characterColor: string) => {
-    const tempId = randomUUID()
-    
-    try {
-      const response = await fetch(`${API_URL}/api/users/anonymous`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name || undefined,
-          characterType,
-          characterColor,
-        }),
-      })
-      
-      const data = await response.json()
-      
-      const newUser: User = {
-        id: data.user.id,
-        name: data.user.name,
-        characterType: data.user.characterType,
-        characterColor: data.user.characterColor,
-        locationSharingEnabled: true,
-        authProvider: null,
-        authId: null,
-        createdAt: data.user.createdAt,
-      }
-      
-      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser))
-      setUser(newUser)
-    } catch (error) {
-      console.error('Failed to create user:', error)
-      const fallbackUser: User = {
-        id: tempId,
-        name: name || `익명${tempId.substring(0, 4)}`,
+    const response = await fetch(`${API_URL}/api/users/anonymous`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name || undefined,
         characterType,
         characterColor,
-        locationSharingEnabled: true,
-        authProvider: null,
-        authId: null,
-      }
-      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(fallbackUser))
-      setUser(fallbackUser)
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`API error (${response.status}): ${errorText}`)
     }
+
+    const data = await response.json()
+
+    const newUser: User = {
+      id: data.user.id,
+      name: data.user.name,
+      characterType: data.user.characterType,
+      characterColor: data.user.characterColor,
+      locationSharingEnabled: true,
+      authProvider: null,
+      authId: null,
+      createdAt: data.user.createdAt,
+    }
+
+    await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser))
+    setUser(newUser)
   }
 
   const logout = async () => {
@@ -142,6 +130,25 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  const verifyUser = useCallback(async (): Promise<boolean> => {
+    if (!user) return false
+
+    try {
+      const response = await fetch(`${API_URL}/api/users/${user.id}`)
+      if (!response.ok) {
+        // 사용자가 DB에 없음 - 로컬 데이터 삭제
+        await AsyncStorage.multiRemove([USER_STORAGE_KEY, ROOM_STORAGE_KEY])
+        setUser(null)
+        setCurrentRoomState(null)
+        return false
+      }
+      return true
+    } catch (error) {
+      console.error('Failed to verify user:', error)
+      return false
+    }
+  }, [user])
+
   return (
     <UserContext.Provider
       value={{
@@ -155,6 +162,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         toggleLocationSharing,
         updateProfile,
         setCurrentRoom,
+        verifyUser,
       }}
     >
       {children}

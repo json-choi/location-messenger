@@ -1,399 +1,240 @@
-import React, { useState } from 'react'
+import React, { useState } from "react";
+import { ScrollView, Switch, Alert } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useUser, useLocation } from "../../contexts";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
-  Alert,
-  TextInput,
-} from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import { router } from 'expo-router'
-import { useUser, useLocation } from '../../contexts'
+    CharacterType,
+    CHARACTER_TYPES,
+    CHARACTER_EMOJIS,
+    CHARACTER_NAMES,
+    CHARACTER_COLORS,
+} from "@location-messenger/shared";
+import { colors } from "../../constants/design";
 import {
-  CharacterType,
-  CHARACTER_TYPES,
-  CHARACTER_EMOJIS,
-  CHARACTER_NAMES,
-  CHARACTER_COLORS,
-} from '@location-messenger/shared'
+    Box,
+    VStack,
+    HStack,
+    Text,
+    Heading,
+    Input,
+    InputField,
+    Pressable,
+    Spinner,
+} from "../../components/ui";
 
 export default function ProfileScreen() {
-  const { user, logout, updateCharacter, toggleLocationSharing, updateProfile } = useUser()
-  const { isTracking, startTracking, stopTracking } = useLocation()
-  const [isEditing, setIsEditing] = useState(false)
-  const [editedName, setEditedName] = useState(user?.name || '')
+    const { user, logout, updateCharacter, toggleLocationSharing, updateProfile } = useUser();
+    const { isTracking, startTracking, stopTracking } = useLocation();
+    const insets = useSafeAreaInsets();
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedName, setEditedName] = useState(user?.name || "");
 
-  const handleCharacterSelect = async (type: CharacterType) => {
-    if (user) {
-      await updateCharacter(type, user.characterColor)
+    const handleCharacterSelect = async (type: CharacterType) => {
+        if (user) {
+            await updateCharacter(type, user.characterColor);
+        }
+    };
+
+    const handleColorSelect = async (color: string) => {
+        if (user) {
+            await updateCharacter(user.characterType, color);
+        }
+    };
+
+    const handleLocationToggle = async (enabled: boolean) => {
+        await toggleLocationSharing(enabled);
+        if (enabled) {
+            await startTracking();
+        } else {
+            await stopTracking();
+        }
+    };
+
+    const handleLogout = async () => {
+        Alert.alert("로그아웃", "정말 로그아웃 하시겠습니까?", [
+            { text: "취소", style: "cancel" },
+            {
+                text: "로그아웃",
+                style: "destructive",
+                onPress: async () => {
+                    await stopTracking();
+                    await logout();
+                    router.replace("/");
+                },
+            },
+        ]);
+    };
+
+    const handleSaveName = async () => {
+        if (editedName.trim()) {
+            await updateProfile(editedName.trim());
+            setIsEditing(false);
+        }
+    };
+
+    if (!user) {
+        return (
+            <Box className="flex-1 justify-center items-center bg-background-0">
+                <Spinner size="large" />
+            </Box>
+        );
     }
-  }
 
-  const handleColorSelect = async (color: string) => {
-    if (user) {
-      await updateCharacter(user.characterType, color)
-    }
-  }
-
-  const handleLocationToggle = async (enabled: boolean) => {
-    await toggleLocationSharing(enabled)
-    if (enabled) {
-      await startTracking()
-    } else {
-      await stopTracking()
-    }
-  }
-
-  const handleLogout = async () => {
-    Alert.alert(
-      '로그아웃',
-      '정말 로그아웃 하시겠습니까?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '로그아웃',
-          style: 'destructive',
-          onPress: async () => {
-            await stopTracking()
-            await logout()
-            router.replace('/')
-          },
-        },
-      ]
-    )
-  }
-
-  const handleSaveName = async () => {
-    if (editedName.trim()) {
-      await updateProfile(editedName.trim())
-      setIsEditing(false)
-    }
-  }
-
-  if (!user) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>로딩 중...</Text>
-      </View>
-    )
-  }
+        <ScrollView className="flex-1 bg-background-50" contentContainerClassName="pb-10">
+            <Box className="px-5 pb-4 bg-background-0" style={{ paddingTop: insets.top + 8 }}>
+                <Heading size="2xl">내 정보</Heading>
+            </Box>
 
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <View style={styles.header}>
-        <Text style={styles.title}>내 정보</Text>
-      </View>
+            <HStack className="items-center bg-background-0 px-5 py-5 mb-3 border-b border-outline-100">
+                <Box
+                    className="w-20 h-20 rounded-full border-4 justify-center items-center bg-background-0 mr-4 shadow-soft-1"
+                    style={{ borderColor: user.characterColor }}
+                >
+                    <Text className="text-4xl">{CHARACTER_EMOJIS[user.characterType]}</Text>
+                </Box>
+                <VStack className="flex-1">
+                    {isEditing ? (
+                        <HStack className="items-center">
+                            <Input variant="underlined" size="md" className="flex-1">
+                                <InputField
+                                    value={editedName}
+                                    onChangeText={setEditedName}
+                                    autoFocus
+                                    className="text-xl font-bold"
+                                />
+                            </Input>
+                            <Pressable onPress={handleSaveName} className="ml-2 p-2">
+                                <Ionicons
+                                    name="checkmark"
+                                    size={24}
+                                    color={colors.secondary.DEFAULT}
+                                />
+                            </Pressable>
+                        </HStack>
+                    ) : (
+                        <Pressable onPress={() => setIsEditing(true)}>
+                            <Heading size="xl" className="mb-1">
+                                {user.name || "이름 없음"}
+                            </Heading>
+                            <Text size="sm" className="text-secondary-500 mb-1">
+                                탭하여 수정
+                            </Text>
+                        </Pressable>
+                    )}
+                    <Text size="md" className="text-typography-500">
+                        {user.email}
+                    </Text>
+                </VStack>
+            </HStack>
 
-      <View style={styles.profileCard}>
-        <View style={[styles.avatarLarge, { borderColor: user.characterColor }]}>
-          <Text style={styles.avatarEmoji}>{CHARACTER_EMOJIS[user.characterType]}</Text>
-        </View>
-        <View style={styles.profileInfo}>
-          {isEditing ? (
-            <View style={styles.nameEditContainer}>
-              <TextInput
-                style={styles.nameInput}
-                value={editedName}
-                onChangeText={setEditedName}
-                autoFocus
-              />
-              <TouchableOpacity onPress={handleSaveName} style={styles.saveButton}>
-                <Ionicons name="checkmark" size={20} color="#007AFF" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity onPress={() => setIsEditing(true)}>
-              <Text style={styles.userName}>{user.name || '이름 없음'}</Text>
-              <Text style={styles.editHint}>탭하여 수정</Text>
-            </TouchableOpacity>
-          )}
-          <Text style={styles.userEmail}>{user.email}</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>캐릭터 선택</Text>
-        <View style={styles.characterGrid}>
-          {CHARACTER_TYPES.map((type) => (
-            <TouchableOpacity
-              key={type}
-              style={[
-                styles.characterItem,
-                user.characterType === type && styles.characterItemSelected,
-              ]}
-              onPress={() => handleCharacterSelect(type)}
+            <VStack
+                className="bg-background-0 mb-3 px-5 py-5 border-y border-outline-100"
+                space="md"
             >
-              <Text style={styles.characterEmoji}>{CHARACTER_EMOJIS[type]}</Text>
-              <Text style={styles.characterName}>{CHARACTER_NAMES[type]}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+                <Heading size="md">캐릭터 선택</Heading>
+                <HStack className="flex-wrap -mx-2">
+                    {CHARACTER_TYPES.map((type) => (
+                        <Pressable
+                            key={type}
+                            className={`w-1/3 items-center py-3 px-2 rounded-xl border-2 ${
+                                user.characterType === type
+                                    ? "border-secondary-500 bg-secondary-50"
+                                    : "border-transparent"
+                            }`}
+                            onPress={() => handleCharacterSelect(type)}
+                        >
+                            <Text className="text-3xl mb-1">{CHARACTER_EMOJIS[type]}</Text>
+                            <Text size="sm" className="text-typography-600">
+                                {CHARACTER_NAMES[type]}
+                            </Text>
+                        </Pressable>
+                    ))}
+                </HStack>
+            </VStack>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>캐릭터 색상</Text>
-        <View style={styles.colorGrid}>
-          {CHARACTER_COLORS.map((color) => (
-            <TouchableOpacity
-              key={color}
-              style={[
-                styles.colorItem,
-                { backgroundColor: color },
-                user.characterColor === color && styles.colorItemSelected,
-              ]}
-              onPress={() => handleColorSelect(color)}
+            <VStack
+                className="bg-background-0 mb-3 px-5 py-5 border-y border-outline-100"
+                space="md"
             >
-              {user.characterColor === color && (
-                <Ionicons name="checkmark" size={20} color="#FFF" />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+                <Heading size="md">캐릭터 색상</Heading>
+                <HStack className="flex-wrap -mx-1.5">
+                    {CHARACTER_COLORS.map((color) => (
+                        <Pressable
+                            key={color}
+                            className={`w-11 h-11 rounded-full m-1.5 justify-center items-center ${
+                                user.characterColor === color
+                                    ? "border-[3px] border-typography-900"
+                                    : ""
+                            }`}
+                            style={{ backgroundColor: color }}
+                            onPress={() => handleColorSelect(color)}
+                        >
+                            {user.characterColor === color && (
+                                <Ionicons name="checkmark" size={20} color="#FFF" />
+                            )}
+                        </Pressable>
+                    ))}
+                </HStack>
+            </VStack>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>설정</Text>
+            <VStack
+                className="bg-background-0 mb-3 px-5 py-5 border-y border-outline-100"
+                space="md"
+            >
+                <Heading size="md">설정</Heading>
 
-        <View style={styles.settingItem}>
-          <View style={styles.settingInfo}>
-            <Ionicons name="location" size={24} color="#007AFF" />
-            <View style={styles.settingTextContainer}>
-              <Text style={styles.settingTitle}>위치 공유</Text>
-              <Text style={styles.settingSubtitle}>
-                {user.locationSharingEnabled ? '친구들에게 내 위치가 표시됩니다' : '위치 공유가 꺼져 있습니다'}
-              </Text>
-            </View>
-          </View>
-          <Switch
-            value={user.locationSharingEnabled}
-            onValueChange={handleLocationToggle}
-            trackColor={{ false: '#ccc', true: '#4CAF50' }}
-            thumbColor={user.locationSharingEnabled ? '#fff' : '#f4f3f4'}
-          />
-        </View>
+                <HStack className="items-center justify-between py-2">
+                    <HStack className="items-center flex-1">
+                        <Ionicons name="location" size={24} color={colors.secondary.DEFAULT} />
+                        <VStack className="ml-3 flex-1">
+                            <Text size="lg" bold>
+                                위치 공유
+                            </Text>
+                            <Text size="sm" className="text-typography-500 mt-0.5">
+                                {user.locationSharingEnabled
+                                    ? "친구들에게 내 위치가 표시됩니다"
+                                    : "위치 공유가 꺼져 있습니다"}
+                            </Text>
+                        </VStack>
+                    </HStack>
+                    <Switch
+                        value={user.locationSharingEnabled}
+                        onValueChange={handleLocationToggle}
+                        trackColor={{ false: colors.gray[300], true: colors.success[500] }}
+                        thumbColor={user.locationSharingEnabled ? colors.white : colors.gray[100]}
+                    />
+                </HStack>
 
-        {isTracking && (
-          <View style={styles.trackingInfo}>
-            <View style={styles.trackingDot} />
-            <Text style={styles.trackingText}>위치 추적 중...</Text>
-          </View>
-        )}
-      </View>
+                {isTracking && (
+                    <HStack className="items-center mt-2 pt-4 border-t border-outline-100">
+                        <Box className="w-2 h-2 rounded-full bg-success-500 mr-2" />
+                        <Text size="sm" className="text-success-600">
+                            위치 추적 중...
+                        </Text>
+                    </HStack>
+                )}
+            </VStack>
 
-      <View style={styles.section}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
-          <Text style={styles.logoutText}>로그아웃</Text>
-        </TouchableOpacity>
-      </View>
+            <Box className="bg-background-0 mb-3 px-5 py-4 border-y border-outline-100">
+                <Pressable
+                    className="flex-row items-center justify-center py-3.5 rounded-xl bg-error-50 border border-error-200 active:bg-error-100"
+                    onPress={handleLogout}
+                >
+                    <Ionicons name="log-out-outline" size={20} color={colors.error[500]} />
+                    <Text size="lg" bold className="text-error-600 ml-2">
+                        로그아웃
+                    </Text>
+                </Pressable>
+            </Box>
 
-      <View style={styles.footer}>
-        <Text style={styles.versionText}>Location Messenger v1.0.0</Text>
-      </View>
-    </ScrollView>
-  )
+            <Box className="items-center py-6">
+                <Text size="sm" className="text-typography-400">
+                    Location Messenger v1.0.0
+                </Text>
+            </Box>
+        </ScrollView>
+    );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  contentContainer: {
-    paddingBottom: 40,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 16,
-    backgroundColor: '#FFF',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 12,
-  },
-  avatarLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    marginRight: 16,
-  },
-  avatarEmoji: {
-    fontSize: 40,
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  editHint: {
-    fontSize: 12,
-    color: '#007AFF',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: '#666',
-  },
-  nameEditContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  nameInput: {
-    fontSize: 18,
-    fontWeight: '600',
-    borderBottomWidth: 1,
-    borderBottomColor: '#007AFF',
-    flex: 1,
-    paddingVertical: 2,
-  },
-  saveButton: {
-    marginLeft: 8,
-    padding: 4,
-  },
-  section: {
-    backgroundColor: '#FFF',
-    marginTop: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
-    color: '#333',
-  },
-  characterGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -8,
-  },
-  characterItem: {
-    width: '33.33%',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  characterItemSelected: {
-    borderColor: '#007AFF',
-    backgroundColor: '#F0F8FF',
-  },
-  characterEmoji: {
-    fontSize: 32,
-    marginBottom: 4,
-  },
-  characterName: {
-    fontSize: 12,
-    color: '#666',
-  },
-  colorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -6,
-  },
-  colorItem: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    margin: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  colorItemSelected: {
-    borderWidth: 3,
-    borderColor: '#000',
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  settingInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  settingTextContainer: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  settingSubtitle: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
-  },
-  trackingInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  trackingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#4CAF50',
-    marginRight: 8,
-  },
-  trackingText: {
-    fontSize: 12,
-    color: '#4CAF50',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#FFF0F0',
-    borderWidth: 1,
-    borderColor: '#FFCCCB',
-  },
-  logoutText: {
-    color: '#FF3B30',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  footer: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  versionText: {
-    fontSize: 12,
-    color: '#999',
-  },
-})

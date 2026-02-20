@@ -1,6 +1,6 @@
-import React from 'react'
-import { View, Text, StyleSheet } from 'react-native'
 import { CharacterType, CHARACTER_EMOJIS } from '@location-messenger/shared'
+import React from 'react'
+import { Text, View } from 'react-native'
 
 interface ChatBubbleProps {
   content: string
@@ -33,95 +33,40 @@ export default function ChatBubble({
   const emoji = senderCharacter ? CHARACTER_EMOJIS[senderCharacter] : null
 
   return (
-    <View style={[styles.container, isMine ? styles.containerMine : styles.containerOther]}>
+    <View className={`my-1 mx-3 max-w-[80%] ${isMine ? 'self-end' : 'self-start'}`}>
       {!isMine && showSender && senderName && (
-        <View style={styles.senderInfo}>
-          {emoji && <Text style={styles.senderEmoji}>{emoji}</Text>}
-          <Text style={[styles.senderName, senderColor && { color: senderColor }]}>
+        <View className="flex-row items-center mb-1 ml-1">
+          {emoji && <Text className="text-base mr-1">{emoji}</Text>}
+          <Text
+            className="text-xs font-semibold text-typography-600"
+            style={senderColor ? { color: senderColor } : undefined}
+          >
             {senderName}
           </Text>
         </View>
       )}
       <View
-        style={[
-          styles.bubble,
-          isMine ? styles.bubbleMine : styles.bubbleOther,
-        ]}
+        className={`px-4 py-3 rounded-2xl ${
+          isMine
+            ? 'bg-secondary-500 rounded-br-sm'
+            : 'bg-background-100 rounded-bl-sm'
+        }`}
       >
-        <Text style={[styles.message, isMine ? styles.messageMine : styles.messageOther]}>
+        <Text
+          className={`text-sm leading-snug ${
+            isMine ? 'text-typography-0' : 'text-typography-900'
+          }`}
+        >
           {content}
         </Text>
       </View>
       {timestamp && (
-        <Text style={[styles.time, isMine ? styles.timeMine : styles.timeOther]}>
+        <Text
+          className={`text-[10px] mt-1 text-typography-400 ${isMine ? 'text-right' : 'text-left ml-1'}`}
+        >
           {formatTime(timestamp)}
         </Text>
       )}
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    marginVertical: 4,
-    marginHorizontal: 12,
-    maxWidth: '80%',
-  },
-  containerMine: {
-    alignSelf: 'flex-end',
-  },
-  containerOther: {
-    alignSelf: 'flex-start',
-  },
-  senderInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    marginLeft: 4,
-  },
-  senderEmoji: {
-    fontSize: 14,
-    marginRight: 4,
-  },
-  senderName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-  },
-  bubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
-  },
-  bubbleMine: {
-    backgroundColor: '#007AFF',
-    borderBottomRightRadius: 4,
-  },
-  bubbleOther: {
-    backgroundColor: '#E9E9EB',
-    borderBottomLeftRadius: 4,
-  },
-  message: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  messageMine: {
-    color: '#FFFFFF',
-  },
-  messageOther: {
-    color: '#000000',
-  },
-  time: {
-    fontSize: 11,
-    marginTop: 4,
-  },
-  timeMine: {
-    textAlign: 'right',
-    color: '#999',
-  },
-  timeOther: {
-    textAlign: 'left',
-    color: '#999',
-    marginLeft: 4,
-  },
-})

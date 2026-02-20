@@ -1,6 +1,7 @@
-import React from 'react'
-import { View, Text, StyleSheet } from 'react-native'
 import { CharacterType, CHARACTER_EMOJIS } from '@location-messenger/shared'
+import React from 'react'
+import { Text, View } from 'react-native'
+import { colors } from '../constants/design'
 
 interface CharacterMarkerProps {
   type: CharacterType
@@ -27,28 +28,32 @@ export default function CharacterMarker({
   const emoji = CHARACTER_EMOJIS[type] || '🐱'
 
   return (
-    <View style={styles.wrapper}>
+    <View className="items-center">
       <View
-        style={[
-          styles.container,
-          {
-            width: sizeConfig.container,
-            height: sizeConfig.container,
-            borderRadius: sizeConfig.container / 2,
-            borderColor: color,
-            borderWidth: sizeConfig.ring,
-          },
-        ]}
+        className="bg-background-0 justify-center items-center shadow-hard-2 rounded-full"
+        style={{
+          width: sizeConfig.container,
+          height: sizeConfig.container,
+          borderColor: color,
+          borderWidth: sizeConfig.ring,
+        }}
       >
-        <Text style={[styles.emoji, { fontSize: sizeConfig.emoji }]}>
+        <Text 
+          className="text-center"
+          style={{ fontSize: sizeConfig.emoji }}
+        >
           {emoji}
         </Text>
-        {!isOnline && <View style={styles.offlineOverlay} />}
+        {!isOnline && (
+          <View className="absolute inset-0 bg-background-900/50 rounded-full" />
+        )}
       </View>
-      {isOnline && <View style={[styles.onlineDot, { backgroundColor: '#4CAF50' }]} />}
+      {isOnline && (
+        <View className="absolute top-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-background-0 bg-success-500" />
+      )}
       {name && (
-        <View style={styles.nameTag}>
-          <Text style={styles.nameText} numberOfLines={1}>
+        <View className="mt-1 px-2 py-0.5 bg-background-900/80 rounded-lg max-w-[80px]">
+          <Text className="text-typography-0 text-[11px] font-semibold text-center" numberOfLines={1}>
             {name}
           </Text>
         </View>
@@ -56,51 +61,3 @@ export default function CharacterMarker({
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  wrapper: {
-    alignItems: 'center',
-  },
-  container: {
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  emoji: {
-    textAlign: 'center',
-  },
-  offlineOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(128, 128, 128, 0.5)',
-    borderRadius: 16,
-  },
-  onlineDot: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  nameTag: {
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 10,
-    maxWidth: 80,
-  },
-  nameText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-})
