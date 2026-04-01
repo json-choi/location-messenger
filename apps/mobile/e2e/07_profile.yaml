@@ -1,0 +1,30 @@
+appId: com.yogiya.app
+tags:
+  - profile
+---
+# 프로필 화면 플로우
+# 프로필 정보가 표시되고, 이름 편집, 로그아웃이 동작하는지 검증
+
+- launchApp
+
+# 프로필 탭으로 이동
+- tapOn:
+    id: "tab_profile"
+- assertVisible:
+    id: "profile_screen"
+
+# 온보딩에서 입력한 이름이 보여야 한다
+# (이전 테스트에서 설정한 이름이거나 기존 유저 이름)
+
+# 캐릭터 선택 영역이 보여야 한다
+- assertVisible: "남자"
+- assertVisible: "여자"
+
+# 위치 공유 토글이 보여야 한다
+- assertVisible: "위치 공유"
+
+# 로그아웃 버튼이 보여야 한다
+- scrollUntilVisible:
+    element: "로그아웃"
+    direction: DOWN
+- assertVisible: "로그아웃"

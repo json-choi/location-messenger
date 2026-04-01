@@ -1,0 +1,39 @@
+appId: com.yogiya.app
+tags:
+  - room
+  - deeplink
+---
+# 딥링크 방 참여 플로우
+# yogiya://room/CODE 딥링크로 방에 참여하는 플로우
+# 온보딩되지 않은 유저가 딥링크로 방에 들어올 때의 인라인 온보딩 검증
+
+- launchApp:
+    clearState: true
+
+- openLink: "yogiya://room/TEST01"
+
+# 방 참여 화면이 보여야 한다
+- assertVisible:
+    id: "room_join_screen"
+    timeout: 5000
+
+# 온보딩되지 않은 유저이므로 인라인 온보딩 UI가 표시
+- assertVisible: "방에 초대되었어요!"
+- assertVisible: "이름을 입력하고 참여하세요"
+
+# 초대 코드 표시
+- assertVisible: "TEST01"
+
+# 이름 입력
+- tapOn:
+    id: "room_name_input"
+- inputText: "딥링크유저"
+
+# 참여하기 버튼
+- tapOn:
+    id: "room_join_button"
+
+# 방 참여 후 지도 화면으로 이동
+- assertVisible:
+    id: "map_screen"
+    timeout: 10000

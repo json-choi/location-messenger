@@ -1,0 +1,39 @@
+appId: com.yogiya.app
+tags:
+  - friends
+---
+# 친구 화면 (빈 상태) 플로우
+# 친구가 없을 때 빈 상태 UI와 추가 모달을 검증
+
+- launchApp:
+    clearState: true
+
+# 먼저 온보딩
+- tapOn:
+    id: "name_input"
+- inputText: "친구테스트"
+- tapOn:
+    id: "start_button"
+- assertVisible:
+    id: "map_screen"
+    timeout: 5000
+
+# 친구 탭 이동
+- tapOn:
+    id: "tab_friends"
+- assertVisible:
+    id: "friends_screen"
+
+# 빈 상태 UI
+- assertVisible: "아직 친구가 없습니다"
+- assertVisible: "친구 코드로 친구를 추가해보세요"
+- assertVisible: "친구 추가하기"
+
+# 친구 추가 버튼 탭 → 모달 열림
+- tapOn: "친구 추가하기"
+- assertVisible: "친구 추가"
+- assertVisible: "친구의 사용자 ID를 입력하세요"
+
+# 취소 버튼으로 모달 닫기
+- tapOn: "취소"
+- assertNotVisible: "친구의 사용자 ID를 입력하세요"

@@ -1,0 +1,35 @@
+appId: com.yogiya.app
+tags:
+  - room
+  - core
+---
+# 방 생성 플로우
+# 지도 화면에서 새 방을 만들고 방 UI가 표시되는지 검증
+
+- launchApp
+
+# 지도 화면
+- assertVisible:
+    id: "map_screen"
+    timeout: 5000
+
+# 방이 없을 때 "새 방 만들기" 버튼이 보여야 한다
+- assertVisible: "새 방 만들기"
+
+# 방 생성
+- tapOn: "새 방 만들기"
+
+# 방 생성 후 방 코드 카드가 표시되어야 한다
+- assertVisible:
+    text: "방 코드:.*"
+    timeout: 5000
+
+# 참여자 수 표시
+- assertVisible:
+    text: "참여 \\d+명"
+
+# 채팅 패널이 보여야 한다 (드래그 바)
+- assertVisible: "메시지 입력..."
+
+# 목표지점 FAB이 보여야 한다
+- assertVisible: "목표지점"

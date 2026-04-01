@@ -1,0 +1,20 @@
+appId: com.yogiya.app
+tags:
+  - chats
+---
+# 채팅 목록 (빈 상태) 플로우
+# 채팅이 없을 때 빈 상태 UI 검증
+
+- launchApp
+
+# 채팅 탭으로 이동
+- tapOn:
+    id: "tab_chats"
+- assertVisible:
+    id: "chats_screen"
+
+# 헤더에 "채팅" 타이틀
+- assertVisible: "채팅"
+
+# 빈 상태 텍스트
+- assertVisible: "채팅이 없습니다"

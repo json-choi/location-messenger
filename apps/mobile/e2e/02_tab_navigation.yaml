@@ -1,34 +1,39 @@
 appId: com.yogiya.app
+tags:
+  - navigation
+  - core
 ---
-# Tab Navigation Flow
-# Verifies that all tab screens are accessible
+# 탭 네비게이션 플로우
+# 온보딩 완료 후 모든 탭을 이동할 수 있는지 검증
 
 - launchApp
 
-# Assume user is already onboarded (state persisted)
-# Map tab should be visible by default
+# 지도 탭이 기본 화면
 - assertVisible:
     id: "map_screen"
+    timeout: 5000
 
-# Navigate to Friends tab
+# 친구 탭
 - tapOn:
     id: "tab_friends"
 - assertVisible:
     id: "friends_screen"
+- assertVisible: "친구"
 
-# Navigate to Chats tab
+# 채팅 탭
 - tapOn:
     id: "tab_chats"
 - assertVisible:
     id: "chats_screen"
+- assertVisible: "채팅"
 
-# Navigate to Profile tab
+# 프로필 탭
 - tapOn:
     id: "tab_profile"
 - assertVisible:
     id: "profile_screen"
 
-# Navigate back to Map tab
+# 다시 지도 탭
 - tapOn:
     id: "tab_map"
 - assertVisible:

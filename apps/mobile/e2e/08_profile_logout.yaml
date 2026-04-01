@@ -1,0 +1,31 @@
+appId: com.yogiya.app
+tags:
+  - profile
+  - auth
+---
+# 로그아웃 플로우
+# 로그아웃하면 온보딩 화면으로 돌아가는지 검증
+
+- launchApp
+
+# 프로필 탭
+- tapOn:
+    id: "tab_profile"
+- assertVisible:
+    id: "profile_screen"
+
+# 로그아웃 버튼 스크롤 후 탭
+- scrollUntilVisible:
+    element: "로그아웃"
+    direction: DOWN
+- tapOn: "로그아웃"
+
+# 확인 Alert
+- assertVisible: "로그아웃 하시겠습니까?"
+- tapOn: "로그아웃"
+
+# 온보딩 화면으로 돌아가야 한다
+- assertVisible:
+    id: "onboarding_screen"
+    timeout: 3000
+- assertVisible: "시작하기"

@@ -1,0 +1,37 @@
+appId: com.yogiya.app
+tags:
+  - room
+  - core
+---
+# 방 나가기 플로우
+# 방에서 나가면 "새 방 만들기" 버튼이 다시 보여야 한다
+
+- launchApp
+
+- assertVisible:
+    id: "map_screen"
+    timeout: 5000
+
+# 방이 없으면 먼저 생성
+- runFlow:
+    when:
+      visible: "새 방 만들기"
+    commands:
+      - tapOn: "새 방 만들기"
+      - assertVisible:
+          text: "방 코드:.*"
+          timeout: 5000
+
+# 방 코드가 보이는 상태에서 나가기 버튼 (LogOut 아이콘) 탭
+# LogOut 아이콘은 방 카드 오른쪽에 있음
+- assertVisible:
+    text: "방 코드:.*"
+
+# 나가기 확인 Alert
+- tapOn: "나가기"
+  # Alert에서 "나가기" 버튼 탭
+
+# 방 나간 후 "새 방 만들기" 버튼이 다시 보여야 한다
+- assertVisible:
+    text: "새 방 만들기"
+    timeout: 5000

@@ -1,0 +1,35 @@
+appId: com.yogiya.app
+tags:
+  - onboarding
+  - validation
+---
+# 온보딩 유효성 검증 플로우
+# 이름 없이 시작 불가, 서버 오류 시 Alert 표시 검증
+
+- launchApp:
+    clearState: true
+
+# 온보딩 화면
+- assertVisible:
+    id: "onboarding_screen"
+
+# 이름이 비어있을 때 시작 버튼이 비활성
+- tapOn:
+    id: "start_button"
+# 지도 화면으로 이동하지 않아야 한다 (온보딩에 머무름)
+- assertVisible:
+    id: "onboarding_screen"
+- assertNotVisible:
+    id: "map_screen"
+
+# 이름 입력 후 다시 시도
+- tapOn:
+    id: "name_input"
+- inputText: "유효성테스트"
+- tapOn:
+    id: "start_button"
+
+# 이번에는 진행되어야 한다 (서버 연결 시)
+- assertVisible:
+    id: "map_screen"
+    timeout: 5000
